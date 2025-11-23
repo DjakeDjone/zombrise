@@ -80,7 +80,7 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     commands.spawn((
         MapMarker,
         Replicated,
-        SpatialBundle::from_transform(Transform::from_xyz(0.0, -0.50, 0.0)),
+        SpatialBundle::from_transform(Transform::from_xyz(0.0, -0.55, 0.0)),
         Collider::cylinder(0.05, 28.0),
     ));
 
