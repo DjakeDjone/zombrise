@@ -71,7 +71,7 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     let current_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    let public_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 5000);
+    let public_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 443);
     let socket = UdpSocket::bind(public_addr).unwrap();
     let server_config = ServerConfig {
         current_time,
