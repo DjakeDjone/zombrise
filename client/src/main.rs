@@ -101,11 +101,16 @@ fn setup_client(
 
     // Parse server address from config - supports both domain names and IP addresses
     // Expected format: "domain.com:port" or "IP:port"
+    // Prefer IPv4 addresses to avoid IPv6 connectivity issues
     let server_addr: SocketAddr = server_config
         .url
         .to_socket_addrs()
         .expect("Failed to resolve server address")
-        .next()
+        .find(|addr| addr.is_ipv4())  // Prefer IPv4
+        .or_else(|| {
+            // Fallback to any address if no IPv4 found
+            server_config.url.to_socket_addrs().ok()?.next()
+        })
         .expect("No address found for server");
     
     println!("Connecting to server at: {}", server_addr);
