@@ -12,7 +12,7 @@ use bevy_replicon_renet::{
 use dragon_queen::players::player::{
     CameraRotation, MainCamera, Player, PlayerOwner, handle_input,
 };
-use dragon_queen::shared::{MapMarker, SharedPlugin};
+use dragon_queen::shared::{MapMarker, SharedPlugin, TreeMarker};
 use dragon_queen::zombie::zombie::Zombie;
 use std::{
     net::{Ipv4Addr, SocketAddr, UdpSocket},
@@ -45,6 +45,7 @@ fn main() {
                 spawn_player_visuals,
                 spawn_map_visuals,
                 spawn_zombie_visuals,
+                spawn_tree_visuals,
             ),
         )
         .run();
@@ -119,6 +120,7 @@ fn spawn_map_visuals(
 ) {
     for entity in query.iter() {
         commands.entity(entity).insert(SpatialBundle::default());
+        // Spawn landscape without trees (trees come from server)
         spawn_snow_landscape(
             &mut commands,
             &mut meshes,
@@ -126,6 +128,71 @@ fn spawn_map_visuals(
             SnowLandscapeConfig::default(),
             entity,
         );
+    }
+}
+
+fn spawn_tree_visuals(
+    mut commands: Commands,
+    query: Query<(Entity, &Transform), Added<TreeMarker>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let bark_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.38, 0.28, 0.22),
+        perceptual_roughness: 0.9,
+        ..default()
+    });
+
+    let foliage_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.44, 0.64, 0.54),
+        perceptual_roughness: 0.6,
+        metallic: 0.02,
+        reflectance: 0.3,
+        ..default()
+    });
+
+    let trunk_mesh = meshes.add(Cylinder::new(0.12, 1.9));
+    let canopy_mesh = meshes.add(Sphere::new(0.9));
+
+    for (entity, transform) in query.iter() {
+        let trunk_transform =
+            Transform::from_translation(transform.translation + Vec3::new(0.0, 0.95, 0.0));
+
+        commands
+            .entity(entity)
+            .insert(PbrBundle {
+                mesh: trunk_mesh.clone(),
+                material: bark_material.clone(),
+                transform: trunk_transform,
+                ..default()
+            })
+            .with_children(|parent| {
+                let mut lower_canopy = Transform::from_translation(Vec3::new(0.0, 1.05, 0.0));
+                lower_canopy.scale = Vec3::new(1.6, 1.15, 1.6);
+
+                parent.spawn((
+                    PbrBundle {
+                        mesh: canopy_mesh.clone(),
+                        material: foliage_material.clone(),
+                        transform: lower_canopy,
+                        ..default()
+                    },
+                    Name::new("Evergreen Foliage (Lower)"),
+                ));
+
+                let mut upper_canopy = Transform::from_translation(Vec3::new(0.0, 1.7, 0.0));
+                upper_canopy.scale = Vec3::new(1.0, 1.1, 1.0);
+
+                parent.spawn((
+                    PbrBundle {
+                        mesh: canopy_mesh.clone(),
+                        material: foliage_material.clone(),
+                        transform: upper_canopy,
+                        ..default()
+                    },
+                    Name::new("Evergreen Foliage (Upper)"),
+                ));
+            });
     }
 }
 

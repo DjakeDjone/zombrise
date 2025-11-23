@@ -10,7 +10,7 @@ use bevy_replicon_renet::{
     },
 };
 use dragon_queen::players::player::{Player, PlayerOwner};
-use dragon_queen::shared::{MapMarker, MovePlayer, SharedPlugin};
+use dragon_queen::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
 use dragon_queen::zombie::zombie::Zombie;
 use rand::Rng;
 use std::{
@@ -83,6 +83,26 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
         SpatialBundle::from_transform(Transform::from_xyz(0.0, -0.50, 0.0)),
         Collider::cylinder(0.05, 28.0),
     ));
+
+    // Spawn trees with collision
+    let radius = 28.0;
+    let tree_positions = [
+        Vec3::new(radius * 0.34, 0.0, radius * 0.4),
+        Vec3::new(-radius * 0.36, 0.0, -radius * 0.38),
+        Vec3::new(-radius * 0.12, 0.0, -radius * 0.55),
+        Vec3::new(radius * 0.55, 0.0, 0.22),
+        Vec3::new(-radius * 0.5, 0.0, 0.15),
+    ];
+
+    for position in tree_positions {
+        commands.spawn((
+            TreeMarker,
+            Replicated,
+            Transform::from_translation(position),
+            GlobalTransform::default(),
+            Collider::cylinder(1.0, 0.3), // Collision cylinder for tree trunk and canopy
+        ));
+    }
 
     println!("Server started on {}", public_addr);
 }
