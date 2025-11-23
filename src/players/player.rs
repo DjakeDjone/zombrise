@@ -1,31 +1,38 @@
 use bevy::{
     ecs::{
         component::Component,
+        event::{Event, EventWriter},
         query::{With, Without},
         system::{Query, Res},
     },
     input::{ButtonInput, keyboard::KeyCode},
     math::Vec3,
+    prelude::Reflect,
     time::Time,
     transform::components::Transform,
 };
+use bevy_replicon::prelude::ClientId;
+use serde::{Deserialize, Serialize};
 
-#[derive(Component)]
+#[derive(Component, Serialize, Deserialize, Reflect)]
 pub struct Player;
+
+#[derive(Component, Serialize, Deserialize, Reflect)]
+pub struct PlayerOwner(pub ClientId);
 
 #[derive(Component)]
 pub struct MainCamera;
 
-pub fn move_player(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<&mut Transform, With<Player>>,
-    time: Res<Time>,
-) {
-    let mut transform = query.single_mut();
-    let speed = 5.0;
+#[derive(Event, Serialize, Deserialize)]
+pub struct MovePlayer {
+    pub direction: Vec3,
+}
 
+pub fn handle_input(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut move_events: EventWriter<MovePlayer>,
+) {
     let mut direction = Vec3::ZERO;
-    // println!("CURRENT POSITION: {:?}", transform.translation);
 
     if keyboard_input.pressed(KeyCode::ArrowUp) || keyboard_input.pressed(KeyCode::KeyW) {
         direction.z -= 1.0;
@@ -42,7 +49,7 @@ pub fn move_player(
 
     if direction.length() > 0.0 {
         direction = direction.normalize();
-        transform.translation += direction * speed * time.delta_seconds();
+        move_events.send(MovePlayer { direction });
     }
 }
 
