@@ -1,4 +1,6 @@
-pub use crate::players::player::{MovePlayer, Player, PlayerOwner};
+pub use crate::players::player::{
+    DamageFlash, DamagePlayer, Health, MovePlayer, Player, PlayerAttack, PlayerOwner,
+};
 pub use crate::zombie::zombie::Zombie;
 use bevy::prelude::*;
 use bevy_replicon::prelude::*;
@@ -18,10 +20,13 @@ impl Plugin for SharedPlugin {
     fn build(&self, app: &mut App) {
         app.replicate::<Player>();
         app.replicate::<PlayerOwner>();
+        app.replicate::<Health>();
+        app.replicate::<DamageFlash>();
         app.replicate::<Zombie>();
         app.replicate::<Transform>();
         app.replicate::<MapMarker>();
         app.replicate::<TreeMarker>();
         app.add_client_event::<MovePlayer>(ChannelKind::Unordered);
+        app.add_client_event::<PlayerAttack>(ChannelKind::Unordered);
     }
 }

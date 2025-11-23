@@ -9,7 +9,7 @@ use bevy_replicon_renet::{
         transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig},
     },
 };
-use dragon_queen::players::player::{Player, PlayerOwner};
+use dragon_queen::players::player::{DamageFlash, Health, Player, PlayerAttack, PlayerOwner};
 use dragon_queen::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
 use dragon_queen::zombie::zombie::Zombie;
 use rand::Rng;
@@ -44,7 +44,17 @@ fn main() {
             Update,
             (server_event_system, update_map_size, spawn_zombies),
         )
-        .add_systems(FixedUpdate, (handle_move_player, zombie_movement))
+        .add_systems(
+            FixedUpdate,
+            (
+                handle_move_player,
+                zombie_movement,
+                zombie_collision_damage,
+                handle_player_attack,
+                update_damage_flash,
+                remove_dead_players,
+            ),
+        )
         .run();
 }
 
@@ -116,6 +126,8 @@ fn server_event_system(mut commands: Commands, mut server_events: EventReader<Se
                 commands.spawn((
                     Player,
                     PlayerOwner(*client_id),
+                    Health::default(),
+                    DamageFlash::default(),
                     Replicated,
                     Transform::from_xyz(0.0, 3.0, 0.0),
                     GlobalTransform::default(),
@@ -244,6 +256,86 @@ fn zombie_movement(
             let dir = Vec3::new(x, 0.0, z).normalize_or_zero();
             velocity.linvel.x = dir.x * speed * 0.5;
             velocity.linvel.z = dir.z * speed * 0.5;
+        }
+    }
+}
+
+fn zombie_collision_damage(
+    zombie_query: Query<&Transform, With<Zombie>>,
+    mut player_query: Query<(&Transform, &mut Health, &mut DamageFlash), With<Player>>,
+    time: Res<Time>,
+) {
+    const DAMAGE_PER_SECOND: f32 = 10.0;
+    const COLLISION_DISTANCE: f32 = 1.5;
+
+    for zombie_transform in &zombie_query {
+        for (player_transform, mut health, mut damage_flash) in &mut player_query {
+            let distance = zombie_transform
+                .translation
+                .distance(player_transform.translation);
+
+            if distance < COLLISION_DISTANCE && health.current > 0.0 {
+                let damage = DAMAGE_PER_SECOND * time.delta_seconds();
+                health.current = (health.current - damage).max(0.0);
+                damage_flash.timer = 0.3; // Flash for 0.3 seconds
+
+                if health.current <= 0.0 {
+                    println!("Player died!");
+                }
+            }
+        }
+    }
+}
+
+fn handle_player_attack(
+    mut events: EventReader<FromClient<PlayerAttack>>,
+    player_query: Query<(&PlayerOwner, &Transform), With<Player>>,
+    mut zombie_query: Query<(Entity, &Transform), With<Zombie>>,
+    mut commands: Commands,
+) {
+    const ATTACK_RANGE: f32 = 2.0;
+
+    for FromClient { client_id, .. } in events.read() {
+        // Find the attacking player
+        for (owner, player_transform) in &player_query {
+            if owner.0 == *client_id {
+                // Find zombies in range
+                for (zombie_entity, zombie_transform) in &mut zombie_query {
+                    let distance = player_transform
+                        .translation
+                        .distance(zombie_transform.translation);
+
+                    if distance < ATTACK_RANGE {
+                        // For now, just kill the zombie instantly
+                        // You could add zombie health later
+                        commands.entity(zombie_entity).despawn();
+                        println!("Player attacked zombie at distance {}", distance);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn update_damage_flash(mut query: Query<&mut DamageFlash>, time: Res<Time>) {
+    for mut damage_flash in &mut query {
+        if damage_flash.timer > 0.0 {
+            damage_flash.timer -= time.delta_seconds();
+            if damage_flash.timer < 0.0 {
+                damage_flash.timer = 0.0;
+            }
+        }
+    }
+}
+
+fn remove_dead_players(
+    mut commands: Commands,
+    player_query: Query<(Entity, &Health, &PlayerOwner), With<Player>>,
+) {
+    for (entity, health, owner) in &player_query {
+        if health.current <= 0.0 {
+            println!("Removing dead player (Client ID: {:?})", owner.0);
+            commands.entity(entity).despawn_recursive();
         }
     }
 }
