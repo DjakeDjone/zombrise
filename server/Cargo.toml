@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies]
 dragon_queen_shared = { path = "../shared" }
-bevy = { version = "0.14", default-features = false, features = ["bevy_asset", "bevy_scene", "bevy_gltf", "serialize", "animation", "bevy_state", "bevy_pbr", "bevy_render", "bevy_core_pipeline"] }
+# Headless server - no graphics features needed
+bevy = { version = "0.14", default-features = false, features = ["bevy_asset", "bevy_scene", "serialize", "bevy_state"] }
 bevy_replicon = "0.27"
 bevy_replicon_renet = "0.4"
 bevy_rapier3d = "0.27"
