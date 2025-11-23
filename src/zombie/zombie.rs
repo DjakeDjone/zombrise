@@ -1,6 +1,8 @@
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(Component)]
+#[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default)]
+#[reflect(Component)]
 pub struct Zombie;
 
 #[derive(Component)]

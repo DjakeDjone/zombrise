@@ -26,31 +26,12 @@ impl Default for SnowLandscapeConfig {
 
 /// Spawns a stylized snow landscape: a circular plateau, gentle snow mounds,
 /// a frozen pond, scattered boulders, evergreen trees, and ice shards.
-///
-/// Call this inside your Bevy setup system.
-///
-/// ```no_run
-/// use bevy::prelude::*;
-/// use dragon_queen::map::{spawn_snow_landscape, SnowLandscapeConfig};
-///
-/// fn setup(
-///     mut commands: Commands,
-///     mut meshes: ResMut<Assets<Mesh>>,
-///     mut materials: ResMut<Assets<StandardMaterial>>,
-/// ) {
-///     spawn_snow_landscape(
-///         &mut commands,
-///         &mut meshes,
-///         &mut materials,
-///         SnowLandscapeConfig::default(),
-///     );
-/// }
-/// ```
 pub fn spawn_snow_landscape(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     config: SnowLandscapeConfig,
+    parent: Entity,
 ) {
     apply_world_settings(commands, config);
 
@@ -99,13 +80,20 @@ pub fn spawn_snow_landscape(
         ..default()
     });
 
-    spawn_plateau(commands, meshes, &snow_material, config);
-    spawn_snow_drifts(commands, meshes, &snow_material, config);
-    spawn_frozen_pond(commands, meshes, &ice_material, config);
-    spawn_trail(commands, meshes, &packed_snow_material, config);
-    spawn_boulders(commands, meshes, &stone_material, config);
-    spawn_trees(commands, meshes, &bark_material, &foliage_material, config);
-    spawn_ice_shards(commands, meshes, &ice_material, config);
+    spawn_plateau(commands, meshes, &snow_material, config, parent);
+    spawn_snow_drifts(commands, meshes, &snow_material, config, parent);
+    spawn_frozen_pond(commands, meshes, &ice_material, config, parent);
+    spawn_trail(commands, meshes, &packed_snow_material, config, parent);
+    spawn_boulders(commands, meshes, &stone_material, config, parent);
+    spawn_trees(
+        commands,
+        meshes,
+        &bark_material,
+        &foliage_material,
+        config,
+        parent,
+    );
+    spawn_ice_shards(commands, meshes, &ice_material, config, parent);
 }
 
 fn apply_world_settings(commands: &mut Commands, config: SnowLandscapeConfig) {
@@ -121,16 +109,19 @@ fn spawn_plateau(
     meshes: &mut ResMut<Assets<Mesh>>,
     snow_material: &Handle<StandardMaterial>,
     config: SnowLandscapeConfig,
+    parent: Entity,
 ) {
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Cylinder::new(config.radius, config.base_height)),
-            material: snow_material.clone(),
-            transform: Transform::from_xyz(0.0, -config.base_height * 0.5, 0.0),
-            ..default()
-        },
-        Name::new("Snow Plateau"),
-    ));
+    commands
+        .spawn((
+            PbrBundle {
+                mesh: meshes.add(Cylinder::new(config.radius, config.base_height)),
+                material: snow_material.clone(),
+                transform: Transform::from_xyz(0.0, -config.base_height * 0.5, 0.0),
+                ..default()
+            },
+            Name::new("Snow Plateau"),
+        ))
+        .set_parent(parent);
 }
 
 fn spawn_snow_drifts(
@@ -138,6 +129,7 @@ fn spawn_snow_drifts(
     meshes: &mut ResMut<Assets<Mesh>>,
     snow_material: &Handle<StandardMaterial>,
     config: SnowLandscapeConfig,
+    parent: Entity,
 ) {
     let drift_mesh = meshes.add(Sphere::new(1.0));
     let drifts = [
@@ -166,15 +158,17 @@ fn spawn_snow_drifts(
     for (position, scale, elevation) in drifts {
         let mut transform = Transform::from_translation(position + Vec3::Y * elevation);
         transform.scale = Vec3::splat(scale);
-        commands.spawn((
-            PbrBundle {
-                mesh: drift_mesh.clone(),
-                material: snow_material.clone(),
-                transform,
-                ..default()
-            },
-            Name::new("Snow Drift"),
-        ));
+        commands
+            .spawn((
+                PbrBundle {
+                    mesh: drift_mesh.clone(),
+                    material: snow_material.clone(),
+                    transform,
+                    ..default()
+                },
+                Name::new("Snow Drift"),
+            ))
+            .set_parent(parent);
     }
 }
 
@@ -183,21 +177,24 @@ fn spawn_frozen_pond(
     meshes: &mut ResMut<Assets<Mesh>>,
     ice_material: &Handle<StandardMaterial>,
     config: SnowLandscapeConfig,
+    parent: Entity,
 ) {
     let thickness = config.base_height * 0.45;
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Cylinder::new(config.ice_radius, thickness)),
-            material: ice_material.clone(),
-            transform: Transform::from_xyz(
-                -config.radius * 0.28,
-                -config.base_height * 0.6,
-                config.radius * 0.16,
-            ),
-            ..default()
-        },
-        Name::new("Frozen Pond"),
-    ));
+    commands
+        .spawn((
+            PbrBundle {
+                mesh: meshes.add(Cylinder::new(config.ice_radius, thickness)),
+                material: ice_material.clone(),
+                transform: Transform::from_xyz(
+                    -config.radius * 0.28,
+                    -config.base_height * 0.6,
+                    config.radius * 0.16,
+                ),
+                ..default()
+            },
+            Name::new("Frozen Pond"),
+        ))
+        .set_parent(parent);
 }
 
 fn spawn_trail(
@@ -205,24 +202,27 @@ fn spawn_trail(
     meshes: &mut ResMut<Assets<Mesh>>,
     trail_material: &Handle<StandardMaterial>,
     config: SnowLandscapeConfig,
+    parent: Entity,
 ) {
     let mut transform =
         Transform::from_xyz(config.radius * 0.05, -config.base_height * 0.5 + 0.025, 0.0);
     transform.rotation = Quat::from_rotation_y(0.3);
 
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Cuboid::new(
-                config.radius * 0.2,
-                config.base_height * 0.14,
-                config.radius * 1.05,
-            )),
-            material: trail_material.clone(),
-            transform,
-            ..default()
-        },
-        Name::new("Compacted Trail"),
-    ));
+    commands
+        .spawn((
+            PbrBundle {
+                mesh: meshes.add(Cuboid::new(
+                    config.radius * 0.2,
+                    config.base_height * 0.14,
+                    config.radius * 1.05,
+                )),
+                material: trail_material.clone(),
+                transform,
+                ..default()
+            },
+            Name::new("Compacted Trail"),
+        ))
+        .set_parent(parent);
 }
 
 fn spawn_boulders(
@@ -230,6 +230,7 @@ fn spawn_boulders(
     meshes: &mut ResMut<Assets<Mesh>>,
     stone_material: &Handle<StandardMaterial>,
     config: SnowLandscapeConfig,
+    parent: Entity,
 ) {
     let boulder_mesh = meshes.add(Sphere::new(0.9));
     let boulders = [
@@ -250,15 +251,17 @@ fn spawn_boulders(
     for (position, scale) in boulders {
         let mut transform = Transform::from_translation(position + Vec3::Y * 0.18);
         transform.scale = scale;
-        commands.spawn((
-            PbrBundle {
-                mesh: boulder_mesh.clone(),
-                material: stone_material.clone(),
-                transform,
-                ..default()
-            },
-            Name::new("Frosted Boulder"),
-        ));
+        commands
+            .spawn((
+                PbrBundle {
+                    mesh: boulder_mesh.clone(),
+                    material: stone_material.clone(),
+                    transform,
+                    ..default()
+                },
+                Name::new("Frosted Boulder"),
+            ))
+            .set_parent(parent);
     }
 }
 
@@ -268,6 +271,7 @@ fn spawn_trees(
     bark_material: &Handle<StandardMaterial>,
     foliage_material: &Handle<StandardMaterial>,
     config: SnowLandscapeConfig,
+    parent: Entity,
 ) {
     let trunk_mesh = meshes.add(Cylinder::new(0.12, 1.9));
     let canopy_mesh = meshes.add(Sphere::new(0.9));
@@ -293,6 +297,7 @@ fn spawn_trees(
                 },
                 Name::new("Evergreen Trunk"),
             ))
+            .set_parent(parent)
             .with_children(|parent| {
                 let mut lower_canopy = Transform::from_translation(Vec3::new(0.0, 1.05, 0.0));
                 lower_canopy.scale = Vec3::new(1.6, 1.15, 1.6);
@@ -328,6 +333,7 @@ fn spawn_ice_shards(
     meshes: &mut ResMut<Assets<Mesh>>,
     ice_material: &Handle<StandardMaterial>,
     config: SnowLandscapeConfig,
+    parent: Entity,
 ) {
     let shard_mesh = meshes.add(Cuboid::new(0.35, 1.8, 0.35));
     let shards = [
@@ -350,14 +356,16 @@ fn spawn_ice_shards(
         transform.rotation = Quat::from_euler(EulerRot::YXZ, yaw, -0.2, 0.0);
         transform.scale = Vec3::new(0.45, 1.0, 0.45);
 
-        commands.spawn((
-            PbrBundle {
-                mesh: shard_mesh.clone(),
-                material: ice_material.clone(),
-                transform,
-                ..default()
-            },
-            Name::new("Ice Shard"),
-        ));
+        commands
+            .spawn((
+                PbrBundle {
+                    mesh: shard_mesh.clone(),
+                    material: ice_material.clone(),
+                    transform,
+                    ..default()
+                },
+                Name::new("Ice Shard"),
+            ))
+            .set_parent(parent);
     }
 }

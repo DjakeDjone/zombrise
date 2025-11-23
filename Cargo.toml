@@ -7,7 +7,9 @@ edition = "2024"
 bevy = "0.14"
 bevy_replicon = "0.27"
 bevy_replicon_renet = "0.4"
+bevy_rapier3d = "0.27"
 serde = { version = "1.0", features = ["derive"] }
+rand = "0.9.2"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
