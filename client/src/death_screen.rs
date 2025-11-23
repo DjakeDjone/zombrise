@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
-use dragon_queen::players::player::{Health, Player, PlayerOwner};
+use dragon_queen_shared::players::player::{Health, Player, PlayerOwner};
 
 #[derive(Resource, Default)]
 pub struct PlayerDied(pub bool);
