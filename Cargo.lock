@@ -856,9 +856,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_replicon"
-version = "0.27.0"
+version = "0.28.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "453617fd9e06ac2356f4d56c2ea86e47a6e259e281a74a080a82b2e3bad1a739"
+checksum = "152ddff5fa1cf8f2ebded0ea50e3b3cb857624efc12c4a5c03f8db9420da5ce2"
 dependencies = [
  "bevy",
  "bincode",
@@ -870,9 +870,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_replicon_renet"
-version = "0.4.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e242bfd7d91c2297e81cd6c4f6b0089cb44f51b74a5dd0404281fc39f6c66137"
+checksum = "e3f7ea21378e2cdbd304d3ddf59bed7b6ee53990029c22ac5f22295b009c864a"
 dependencies = [
  "bevy",
  "bevy_renet",
@@ -3255,6 +3255,7 @@ dependencies = [
  "rustc-hash 2.1.1",
  "simba",
  "thiserror",
+ "vec_map",
 ]
 
 [[package]]
@@ -3954,14 +3955,12 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.18.1"
+version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f87b8aa10b915a06587d0dec516c282ff295b475d94abf425d62b57710070a2"
+checksum = "b3758f5e68192bb96cc8f9b7e2c2cfdabb435499a28499a42f8f984092adad4b"
 dependencies = [
- "getrandom 0.3.4",
- "js-sys",
+ "getrandom 0.2.16",
  "serde",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -3975,6 +3974,12 @@ name = "varint-rs"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f54a172d0620933a27a4360d3db3e2ae0dd6cceae9730751a036bbf182c4b23"
+
+[[package]]
+name = "vec_map"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "version_check"
