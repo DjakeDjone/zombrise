@@ -11,12 +11,14 @@
 
 ### 1. Configure Nginx Stream Module
 
-The stream configuration must be included at the **top level** of nginx.conf (NOT inside the http block).
+The stream configuration must be added at the **top level** of nginx.conf (NOT inside the http block).
 
-Edit `/etc/nginx/nginx.conf` and add this line near the top (before or after the http block):
+Edit `/etc/nginx/nginx.conf` and add this **stream block** near the top (before or after the http block):
 
 ```nginx
-include /home/benjamin-f/Documents/dev/game/dragon_queen_3d/nginx-stream.conf;
+stream {
+    include /root/dragon_queen_3d/nginx-stream.conf;
+}
 ```
 
 Your `/etc/nginx/nginx.conf` should look something like this:
@@ -25,8 +27,10 @@ Your `/etc/nginx/nginx.conf` should look something like this:
 user www-data;
 worker_processes auto;
 
-# Include stream configuration for UDP proxying
-include /home/benjamin-f/Documents/dev/game/dragon_queen_3d/nginx-stream.conf;
+# Add stream configuration for UDP proxying
+stream {
+    include /root/dragon_queen_3d/nginx-stream.conf;
+}
 
 http {
     # ... existing http configuration ...
