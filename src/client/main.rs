@@ -15,12 +15,17 @@ use dragon_queen::players::player::{
 use dragon_queen::shared::{MapMarker, SharedPlugin, TreeMarker};
 use dragon_queen::zombie::zombie::Zombie;
 use std::{
-    net::{Ipv4Addr, SocketAddr, UdpSocket},
+    net::{SocketAddr, UdpSocket},
     time::SystemTime,
 };
 
 mod map;
 use map::{SnowLandscapeConfig, spawn_snow_landscape};
+
+mod startup_screen;
+use startup_screen::{
+    AppState, ServerConfig, cleanup_startup_screen, handle_startup_ui, show_startup_screen,
+};
 
 #[derive(Resource)]
 struct MyClientId(u64);
@@ -37,12 +42,24 @@ fn main() {
         .add_plugins(RepliconPlugins)
         .add_plugins(RepliconRenetPlugins)
         .add_plugins(SharedPlugin)
+        .init_state::<AppState>()
+        .init_resource::<ServerConfig>()
         .insert_resource(CameraRotation {
             yaw: 0.0,
             pitch: -0.3,
         })
         .init_resource::<PlayerDied>()
-        .add_systems(Startup, (setup, setup_client, lock_cursor))
+        .add_systems(Startup, setup_camera)
+        .add_systems(OnEnter(AppState::StartupScreen), show_startup_screen)
+        .add_systems(OnExit(AppState::StartupScreen), cleanup_startup_screen)
+        .add_systems(
+            Update,
+            handle_startup_ui.run_if(in_state(AppState::StartupScreen)),
+        )
+        .add_systems(
+            OnEnter(AppState::Playing),
+            (setup, setup_client, lock_cursor),
+        )
         .add_systems(
             Update,
             (
@@ -57,12 +74,17 @@ fn main() {
                 display_health_bar,
                 detect_player_death,
                 show_death_screen,
-            ),
+            )
+                .run_if(in_state(AppState::Playing)),
         )
         .run();
 }
 
-fn setup_client(mut commands: Commands, network_channels: Res<RepliconChannels>) {
+fn setup_client(
+    mut commands: Commands,
+    network_channels: Res<RepliconChannels>,
+    server_config: Res<ServerConfig>,
+) {
     let server_channels_config = network_channels.get_server_configs();
     let client_channels_config = network_channels.get_client_configs();
 
@@ -76,8 +98,10 @@ fn setup_client(mut commands: Commands, network_channels: Res<RepliconChannels>)
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
     let client_id = current_time.as_millis() as u64;
-    let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 5000);
-    let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+
+    // Parse server address from config
+    let server_addr: SocketAddr = server_config.url.parse().expect("Invalid server address");
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let authentication = ClientAuthentication::Unsecure {
         client_id,
         protocol_id: 0,
@@ -92,8 +116,8 @@ fn setup_client(mut commands: Commands, network_channels: Res<RepliconChannels>)
     commands.insert_resource(MyClientId(client_id));
 }
 
-fn setup(mut commands: Commands) {
-    // Camera
+fn setup_camera(mut commands: Commands) {
+    // Camera - spawn at startup for UI rendering
     commands.spawn((
         Camera3dBundle {
             transform: Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -101,7 +125,9 @@ fn setup(mut commands: Commands) {
         },
         MainCamera,
     ));
+}
 
+fn setup(mut commands: Commands) {
     // Light
     commands.spawn(PointLightBundle {
         point_light: PointLight {
