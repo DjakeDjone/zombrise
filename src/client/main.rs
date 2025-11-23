@@ -27,14 +27,11 @@ use startup_screen::{
     AppState, ServerConfig, cleanup_startup_screen, handle_startup_ui, show_startup_screen,
 };
 
+mod death_screen;
+use death_screen::{PlayerDied, detect_player_death, handle_death_screen_input, show_death_screen};
+
 #[derive(Resource)]
-struct MyClientId(u64);
-
-#[derive(Resource, Default)]
-struct PlayerDied(bool);
-
-#[derive(Component)]
-struct DeathScreenMarker;
+pub struct MyClientId(pub u64);
 
 fn main() {
     App::new()
@@ -74,6 +71,7 @@ fn main() {
                 display_health_bar,
                 detect_player_death,
                 show_death_screen,
+                handle_death_screen_input,
             )
                 .run_if(in_state(AppState::Playing)),
         )
@@ -364,92 +362,5 @@ fn display_health_bar(
                 );
             }
         }
-    }
-}
-
-fn detect_player_death(
-    player_query: Query<(&Health, &PlayerOwner), With<Player>>,
-    my_client_id: Res<MyClientId>,
-    mut player_died: ResMut<PlayerDied>,
-) {
-    let mut found_player = false;
-    for (health, owner) in player_query.iter() {
-        if owner.0.get() == my_client_id.0 {
-            found_player = true;
-            if health.current <= 0.0 && !player_died.0 {
-                player_died.0 = true;
-                println!("You died!");
-            }
-            break;
-        }
-    }
-
-    // If we had a player but now we don't, they died
-    if !found_player && !player_died.0 {
-        // Check if we ever had a player by seeing if there are any players at all
-        if !player_query.is_empty() {
-            player_died.0 = true;
-            println!("You died!");
-        }
-    }
-}
-
-fn show_death_screen(
-    mut commands: Commands,
-    player_died: Res<PlayerDied>,
-    death_screen_query: Query<Entity, With<DeathScreenMarker>>,
-    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
-) {
-    if player_died.0 && death_screen_query.is_empty() {
-        // Unlock cursor when dead
-        if let Ok(mut window) = window_query.get_single_mut() {
-            window.cursor.grab_mode = CursorGrabMode::None;
-            window.cursor.visible = true;
-        }
-
-        // Spawn death screen UI
-        commands
-            .spawn((
-                NodeBundle {
-                    style: Style {
-                        width: Val::Percent(100.0),
-                        height: Val::Percent(100.0),
-                        align_items: AlignItems::Center,
-                        justify_content: JustifyContent::Center,
-                        flex_direction: FlexDirection::Column,
-                        ..default()
-                    },
-                    background_color: Color::srgba(0.0, 0.0, 0.0, 0.8).into(),
-                    ..default()
-                },
-                DeathScreenMarker,
-            ))
-            .with_children(|parent| {
-                // "YOU DIED" text
-                parent.spawn(TextBundle::from_section(
-                    "YOU DIED",
-                    TextStyle {
-                        font_size: 80.0,
-                        color: Color::srgb(0.8, 0.1, 0.1),
-                        ..default()
-                    },
-                ));
-
-                // Additional info text
-                parent.spawn(
-                    TextBundle::from_section(
-                        "The zombies got you...",
-                        TextStyle {
-                            font_size: 30.0,
-                            color: Color::srgb(0.9, 0.9, 0.9),
-                            ..default()
-                        },
-                    )
-                    .with_style(Style {
-                        margin: UiRect::top(Val::Px(20.0)),
-                        ..default()
-                    }),
-                );
-            });
     }
 }
