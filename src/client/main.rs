@@ -176,7 +176,8 @@ fn camera_follow(
                 // Calculate the offset vector from yaw and pitch
                 let offset = Vec3::new(
                     distance * pitch.cos() * yaw.sin(),
-                    distance * pitch.sin(),
+                    // distance * pitch.sin(),
+                    2.0,
                     distance * pitch.cos() * yaw.cos(),
                 );
 
