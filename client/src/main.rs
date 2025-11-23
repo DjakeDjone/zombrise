@@ -9,11 +9,11 @@ use bevy_replicon_renet::{
         transport::{ClientAuthentication, NetcodeClientTransport},
     },
 };
-use dragon_queen::players::player::{
+use dragon_queen_shared::players::player::{
     CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner, handle_input,
 };
-use dragon_queen::shared::{MapMarker, SharedPlugin, TreeMarker};
-use dragon_queen::zombie::zombie::Zombie;
+use dragon_queen_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
+use dragon_queen_shared::zombie::zombie::Zombie;
 use std::{
     net::{SocketAddr, UdpSocket},
     time::SystemTime,

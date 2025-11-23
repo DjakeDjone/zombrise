@@ -9,9 +9,9 @@ use bevy_replicon_renet::{
         transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig},
     },
 };
-use dragon_queen::players::player::{DamageFlash, Health, Player, PlayerAttack, PlayerOwner};
-use dragon_queen::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
-use dragon_queen::zombie::zombie::Zombie;
+use dragon_queen_shared::players::player::{DamageFlash, Health, Player, PlayerAttack, PlayerOwner};
+use dragon_queen_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
+use dragon_queen_shared::zombie::zombie::Zombie;
 use rand::Rng;
 use std::{
     net::{Ipv4Addr, SocketAddr, UdpSocket},
