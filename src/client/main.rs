@@ -137,17 +137,19 @@ fn spawn_tree_visuals(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    // Trunk: darker grey (visible under snow)
     let bark_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.38, 0.28, 0.22),
+        base_color: Color::srgb(0.25, 0.25, 0.25),
         perceptual_roughness: 0.9,
         ..default()
     });
 
+    // Foliage: snowy white (matte)
     let foliage_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.44, 0.64, 0.54),
-        perceptual_roughness: 0.6,
-        metallic: 0.02,
-        reflectance: 0.3,
+        base_color: Color::srgb(0.98, 0.98, 0.98),
+        perceptual_roughness: 0.85,
+        metallic: 0.0,
+        reflectance: 0.1,
         ..default()
     });
 
@@ -167,6 +169,7 @@ fn spawn_tree_visuals(
                 ..default()
             })
             .with_children(|parent| {
+                // Lower canopy (snow-covered)
                 let mut lower_canopy = Transform::from_translation(Vec3::new(0.0, 1.05, 0.0));
                 lower_canopy.scale = Vec3::new(1.6, 1.15, 1.6);
 
@@ -180,6 +183,7 @@ fn spawn_tree_visuals(
                     Name::new("Evergreen Foliage (Lower)"),
                 ));
 
+                // Upper canopy (snow-covered)
                 let mut upper_canopy = Transform::from_translation(Vec3::new(0.0, 1.7, 0.0));
                 upper_canopy.scale = Vec3::new(1.0, 1.1, 1.0);
 
