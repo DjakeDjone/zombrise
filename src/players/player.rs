@@ -26,11 +26,13 @@ pub struct MainCamera;
 #[derive(Event, Serialize, Deserialize)]
 pub struct MovePlayer {
     pub direction: Vec3,
+    pub camera_yaw: f32,
 }
 
 pub fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut move_events: EventWriter<MovePlayer>,
+    camera_rotation: Option<Res<CameraRotation>>,
 ) {
     let mut direction = Vec3::ZERO;
 
@@ -47,10 +49,24 @@ pub fn handle_input(
         direction.x += 1.0;
     }
 
+    if keyboard_input.pressed(KeyCode::Space) {
+        direction.y += 1.0;
+    }
+
     if direction.length() > 0.0 {
         direction = direction.normalize();
-        move_events.send(MovePlayer { direction });
+        let camera_yaw = camera_rotation.map(|r| r.yaw).unwrap_or(0.0);
+        move_events.send(MovePlayer {
+            direction,
+            camera_yaw,
+        });
     }
+}
+
+#[derive(bevy::prelude::Resource)]
+pub struct CameraRotation {
+    pub yaw: f32,
+    pub pitch: f32,
 }
 
 pub fn camera_follow(
