@@ -23,38 +23,10 @@ impl Plugin for SharedPlugin {
         app.replicate::<Health>();
         app.replicate::<DamageFlash>();
         app.replicate::<Zombie>();
-        app.replicate::<NetworkTransform>();
+        app.replicate::<Transform>();
         app.replicate::<MapMarker>();
         app.replicate::<TreeMarker>();
         app.add_client_event::<MovePlayer>(ChannelKind::Unordered);
         app.add_client_event::<PlayerAttack>(ChannelKind::Unordered);
-    }
-}
-
-#[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default)]
-#[reflect(Component)]
-pub struct NetworkTransform {
-    pub translation: Vec3,
-    pub rotation: Quat,
-    pub scale: Vec3,
-}
-
-impl From<Transform> for NetworkTransform {
-    fn from(t: Transform) -> Self {
-        Self {
-            translation: t.translation,
-            rotation: t.rotation,
-            scale: t.scale,
-        }
-    }
-}
-
-impl NetworkTransform {
-    pub fn as_transform(&self) -> Transform {
-        Transform {
-            translation: self.translation,
-            rotation: self.rotation,
-            scale: self.scale,
-        }
     }
 }
