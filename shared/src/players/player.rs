@@ -5,11 +5,13 @@ use bevy::{
         query::{With, Without},
         system::{Query, Res},
     },
-    input::{ButtonInput, keyboard::KeyCode},
     math::Vec3,
     prelude::Reflect,
     transform::components::Transform,
 };
+
+#[cfg(feature = "client")]
+use bevy::input::{ButtonInput, keyboard::KeyCode};
 use bevy_replicon::prelude::ClientId;
 use serde::{Deserialize, Serialize};
 
@@ -57,6 +59,8 @@ pub struct DamagePlayer {
     pub amount: f32,
 }
 
+
+#[cfg(feature = "client")]
 pub fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut move_events: EventWriter<MovePlayer>,

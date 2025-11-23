@@ -4,17 +4,24 @@
 
 Since your nginx doesn't have the stream module, we'll run the game server directly on port 443.
 
-### 1. Build the server (headless - no GUI dependencies)
+### 1. Build the server (truly headless - zero GUI dependencies!)
+
+The server has been optimized to build without any graphics libraries (no Wayland, X11, or rendering dependencies).
 
 ```bash
 cd /root/dragon_queen_3d
 
-# Pull latest changes if needed
+# Pull latest changes
 git pull
+
+# Clean build to ensure no old dependencies
+cargo clean
 
 # Build the server in release mode
 cargo build --release --bin dragon_queen_server
 ```
+
+This should complete successfully on a headless server without needing to install any graphics packages!
 
 ### 2. Allow the binary to bind to privileged ports
 sudo setcap 'cap_net_bind_service=+ep' target/release/dragon_queen_server

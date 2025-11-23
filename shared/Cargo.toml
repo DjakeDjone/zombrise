@@ -4,10 +4,27 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = { version = "0.14", default-features = false, features = ["bevy_asset", "bevy_scene", "bevy_gltf", "serialize", "animation", "bevy_state", "bevy_pbr", "bevy_render", "bevy_core_pipeline"] }
-bevy_input = "0.14"
+# Minimal features for both client and server
+bevy = { version = "0.14", default-features = false, features = ["serialize", "bevy_state"] }
 bevy_replicon = "0.27"
 bevy_replicon_renet = "0.4"
 bevy_rapier3d = "0.27"
 serde = { version = "1.0", features = ["derive"] }
 rand = "0.9.2"
+
+# Optional: only needed for client
+bevy_input = { version = "0.14", optional = true }
+
+[features]
+default = []
+# Client feature includes all graphics dependencies
+client = [
+    "bevy/bevy_asset",
+    "bevy/bevy_scene", 
+    "bevy/bevy_gltf",
+    "bevy/animation",
+    "bevy/bevy_pbr",
+    "bevy/bevy_render",
+    "bevy/bevy_core_pipeline",
+    "bevy_input"
+]
