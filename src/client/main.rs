@@ -10,7 +10,7 @@ use bevy_replicon_renet::{
     },
 };
 use dragon_queen::players::player::{
-    CameraRotation, MainCamera, Player, PlayerOwner, handle_input,
+    CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner, handle_input,
 };
 use dragon_queen::shared::{MapMarker, SharedPlugin, TreeMarker};
 use dragon_queen::zombie::zombie::Zombie;
@@ -25,6 +25,12 @@ use map::{SnowLandscapeConfig, spawn_snow_landscape};
 #[derive(Resource)]
 struct MyClientId(u64);
 
+#[derive(Resource, Default)]
+struct PlayerDied(bool);
+
+#[derive(Component)]
+struct DeathScreenMarker;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -35,6 +41,7 @@ fn main() {
             yaw: 0.0,
             pitch: -0.3,
         })
+        .init_resource::<PlayerDied>()
         .add_systems(Startup, (setup, setup_client, lock_cursor))
         .add_systems(
             Update,
@@ -46,6 +53,10 @@ fn main() {
                 spawn_map_visuals,
                 spawn_zombie_visuals,
                 spawn_tree_visuals,
+                animate_player_damage,
+                display_health_bar,
+                detect_player_death,
+                show_death_screen,
             ),
         )
         .run();
@@ -277,5 +288,142 @@ fn lock_cursor(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
     if let Ok(mut window) = window_query.get_single_mut() {
         window.cursor.grab_mode = CursorGrabMode::Locked;
         window.cursor.visible = false;
+    }
+}
+
+fn animate_player_damage(
+    mut player_query: Query<
+        (&DamageFlash, &Handle<StandardMaterial>, &PlayerOwner),
+        (With<Player>, Changed<DamageFlash>),
+    >,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    my_client_id: Res<MyClientId>,
+) {
+    for (damage_flash, material_handle, owner) in player_query.iter_mut() {
+        // Only animate our own player
+        if owner.0.get() == my_client_id.0 {
+            if let Some(material) = materials.get_mut(material_handle) {
+                if damage_flash.timer > 0.0 {
+                    // Flash red when damaged
+                    let flash_intensity = (damage_flash.timer / 0.3).clamp(0.0, 1.0);
+                    material.base_color = Color::srgb(
+                        0.8 + 0.2 * flash_intensity,
+                        0.7 - 0.5 * flash_intensity,
+                        0.6 - 0.4 * flash_intensity,
+                    );
+                } else {
+                    // Reset to normal color
+                    material.base_color = Color::srgb(0.8, 0.7, 0.6);
+                }
+            }
+        }
+    }
+}
+
+fn display_health_bar(
+    player_query: Query<(&Health, &PlayerOwner), With<Player>>,
+    my_client_id: Res<MyClientId>,
+) {
+    for (health, owner) in player_query.iter() {
+        // Only display our own player's health
+        if owner.0.get() == my_client_id.0 {
+            // Simple console-based health display for now
+            // You could enhance this with a UI overlay later
+            if health.current != health.max {
+                println!(
+                    "Health: {:.1}/{:.1} ({}%)",
+                    health.current,
+                    health.max,
+                    (health.current / health.max * 100.0) as i32
+                );
+            }
+        }
+    }
+}
+
+fn detect_player_death(
+    player_query: Query<(&Health, &PlayerOwner), With<Player>>,
+    my_client_id: Res<MyClientId>,
+    mut player_died: ResMut<PlayerDied>,
+) {
+    let mut found_player = false;
+    for (health, owner) in player_query.iter() {
+        if owner.0.get() == my_client_id.0 {
+            found_player = true;
+            if health.current <= 0.0 && !player_died.0 {
+                player_died.0 = true;
+                println!("You died!");
+            }
+            break;
+        }
+    }
+
+    // If we had a player but now we don't, they died
+    if !found_player && !player_died.0 {
+        // Check if we ever had a player by seeing if there are any players at all
+        if !player_query.is_empty() {
+            player_died.0 = true;
+            println!("You died!");
+        }
+    }
+}
+
+fn show_death_screen(
+    mut commands: Commands,
+    player_died: Res<PlayerDied>,
+    death_screen_query: Query<Entity, With<DeathScreenMarker>>,
+    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
+) {
+    if player_died.0 && death_screen_query.is_empty() {
+        // Unlock cursor when dead
+        if let Ok(mut window) = window_query.get_single_mut() {
+            window.cursor.grab_mode = CursorGrabMode::None;
+            window.cursor.visible = true;
+        }
+
+        // Spawn death screen UI
+        commands
+            .spawn((
+                NodeBundle {
+                    style: Style {
+                        width: Val::Percent(100.0),
+                        height: Val::Percent(100.0),
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        flex_direction: FlexDirection::Column,
+                        ..default()
+                    },
+                    background_color: Color::srgba(0.0, 0.0, 0.0, 0.8).into(),
+                    ..default()
+                },
+                DeathScreenMarker,
+            ))
+            .with_children(|parent| {
+                // "YOU DIED" text
+                parent.spawn(TextBundle::from_section(
+                    "YOU DIED",
+                    TextStyle {
+                        font_size: 80.0,
+                        color: Color::srgb(0.8, 0.1, 0.1),
+                        ..default()
+                    },
+                ));
+
+                // Additional info text
+                parent.spawn(
+                    TextBundle::from_section(
+                        "The zombies got you...",
+                        TextStyle {
+                            font_size: 30.0,
+                            color: Color::srgb(0.9, 0.9, 0.9),
+                            ..default()
+                        },
+                    )
+                    .with_style(Style {
+                        margin: UiRect::top(Val::Px(20.0)),
+                        ..default()
+                    }),
+                );
+            });
     }
 }

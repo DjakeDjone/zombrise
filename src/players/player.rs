@@ -8,7 +8,6 @@ use bevy::{
     input::{ButtonInput, keyboard::KeyCode},
     math::Vec3,
     prelude::Reflect,
-    time::Time,
     transform::components::Transform,
 };
 use bevy_replicon::prelude::ClientId;
@@ -16,6 +15,26 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Component, Serialize, Deserialize, Reflect)]
 pub struct Player;
+
+#[derive(Component, Serialize, Deserialize, Reflect, Clone)]
+pub struct Health {
+    pub current: f32,
+    pub max: f32,
+}
+
+impl Default for Health {
+    fn default() -> Self {
+        Self {
+            current: 100.0,
+            max: 100.0,
+        }
+    }
+}
+
+#[derive(Component, Serialize, Deserialize, Reflect, Default)]
+pub struct DamageFlash {
+    pub timer: f32,
+}
 
 #[derive(Component, Serialize, Deserialize, Reflect)]
 pub struct PlayerOwner(pub ClientId);
@@ -29,9 +48,19 @@ pub struct MovePlayer {
     pub camera_yaw: f32,
 }
 
+#[derive(Event, Serialize, Deserialize)]
+pub struct PlayerAttack;
+
+#[derive(Event, Serialize, Deserialize)]
+pub struct DamagePlayer {
+    pub client_id: ClientId,
+    pub amount: f32,
+}
+
 pub fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut move_events: EventWriter<MovePlayer>,
+    mut attack_events: EventWriter<PlayerAttack>,
     camera_rotation: Option<Res<CameraRotation>>,
 ) {
     let mut direction = Vec3::ZERO;
@@ -49,10 +78,6 @@ pub fn handle_input(
         direction.x += 1.0;
     }
 
-    if keyboard_input.pressed(KeyCode::Space) {
-        direction.y += 1.0;
-    }
-
     if direction.length() > 0.0 {
         direction = direction.normalize();
         let camera_yaw = camera_rotation.map(|r| r.yaw).unwrap_or(0.0);
@@ -60,6 +85,10 @@ pub fn handle_input(
             direction,
             camera_yaw,
         });
+    }
+
+    if keyboard_input.just_pressed(KeyCode::Space) {
+        attack_events.send(PlayerAttack);
     }
 }
 
