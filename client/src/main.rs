@@ -9,13 +9,14 @@ use bevy_replicon_renet::{
         transport::{ClientAuthentication, NetcodeClientTransport},
     },
 };
+use bevy_simple_text_input::TextInputPlugin;
 use dragon_queen_shared::players::player::{
     CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner, handle_input,
 };
 use dragon_queen_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
 use dragon_queen_shared::zombie::zombie::Zombie;
 use std::{
-    net::{SocketAddr, UdpSocket},
+    net::{SocketAddr, ToSocketAddrs, UdpSocket},
     time::SystemTime,
 };
 
@@ -39,6 +40,7 @@ fn main() {
         .add_plugins(RepliconPlugins)
         .add_plugins(RepliconRenetPlugins)
         .add_plugins(SharedPlugin)
+        .add_plugins(TextInputPlugin)
         .init_state::<AppState>()
         .init_resource::<ServerConfig>()
         .insert_resource(CameraRotation {
@@ -97,8 +99,17 @@ fn setup_client(
         .unwrap();
     let client_id = current_time.as_millis() as u64;
 
-    // Parse server address from config
-    let server_addr: SocketAddr = server_config.url.parse().expect("Invalid server address");
+    // Parse server address from config - supports both domain names and IP addresses
+    // Expected format: "domain.com:port" or "IP:port"
+    let server_addr: SocketAddr = server_config
+        .url
+        .to_socket_addrs()
+        .expect("Failed to resolve server address")
+        .next()
+        .expect("No address found for server");
+    
+    println!("Connecting to server at: {}", server_addr);
+    
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let authentication = ClientAuthentication::Unsecure {
         client_id,

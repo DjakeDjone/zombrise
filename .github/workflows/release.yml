@@ -1,0 +1,191 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual triggering
+
+env:
+  CARGO_TERM_COLOR: always
+  GAME_NAME: dragon_queen
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Get version from tag
+        id: get_version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "version=v0.0.0-dev" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          release_name: Dragon Queen ${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: false
+
+  build-release:
+    name: Build ${{ matrix.platform.name }}
+    needs: create-release
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: Linux x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: dragon_queen-linux-x86_64
+            client_binary: dragon_queen_client
+            server_binary: dragon_queen_server
+            archive_ext: tar.gz
+          
+          - name: Windows x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: dragon_queen-windows-x86_64
+            client_binary: dragon_queen_client.exe
+            server_binary: dragon_queen_server.exe
+            archive_ext: zip
+          
+          - name: macOS x86_64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: dragon_queen-macos-x86_64
+            client_binary: dragon_queen_client
+            server_binary: dragon_queen_server
+            archive_ext: tar.gz
+          
+          - name: macOS ARM64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: dragon_queen-macos-arm64
+            client_binary: dragon_queen_client
+            server_binary: dragon_queen_server
+            archive_ext: tar.gz
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libudev-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache Cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
+
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-${{ matrix.platform.target }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.platform.target }}-cargo-target-
+
+      - name: Build client
+        run: cargo build --release --bin dragon_queen_client --target ${{ matrix.platform.target }}
+
+      - name: Build server
+        run: cargo build --release --bin dragon_queen_server --target ${{ matrix.platform.target }}
+
+      - name: Prepare release directory (Unix)
+        if: matrix.platform.os != 'windows-latest'
+        run: |
+          mkdir -p release/${{ matrix.platform.artifact_name }}
+          cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.client_binary }} release/${{ matrix.platform.artifact_name }}/
+          cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.server_binary }} release/${{ matrix.platform.artifact_name }}/
+          cp -r assets release/${{ matrix.platform.artifact_name }}/
+          
+          # Create README for the release
+          cat > release/${{ matrix.platform.artifact_name }}/README.txt << EOF
+          Dragon Queen ${{ needs.create-release.outputs.version }}
+          
+          To run the game:
+          1. Start the server: ./${{ matrix.platform.server_binary }}
+          2. Start the client: ./${{ matrix.platform.client_binary }}
+          
+          The assets folder must be in the same directory as the executables.
+          EOF
+
+      - name: Prepare release directory (Windows)
+        if: matrix.platform.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release/${{ matrix.platform.artifact_name }}
+          Copy-Item target/${{ matrix.platform.target }}/release/${{ matrix.platform.client_binary }} release/${{ matrix.platform.artifact_name }}/
+          Copy-Item target/${{ matrix.platform.target }}/release/${{ matrix.platform.server_binary }} release/${{ matrix.platform.artifact_name }}/
+          Copy-Item -Recurse assets release/${{ matrix.platform.artifact_name }}/
+          
+          # Create README for the release
+          @"
+          Dragon Queen ${{ needs.create-release.outputs.version }}
+          
+          To run the game:
+          1. Start the server: ${{ matrix.platform.server_binary }}
+          2. Start the client: ${{ matrix.platform.client_binary }}
+          
+          The assets folder must be in the same directory as the executables.
+          "@ | Out-File -FilePath release/${{ matrix.platform.artifact_name }}/README.txt
+
+      - name: Create archive (tar.gz)
+        if: matrix.platform.archive_ext == 'tar.gz'
+        working-directory: release
+        run: |
+          tar -czf ${{ matrix.platform.artifact_name }}.tar.gz ${{ matrix.platform.artifact_name }}
+
+      - name: Create archive (zip)
+        if: matrix.platform.archive_ext == 'zip'
+        working-directory: release
+        shell: pwsh
+        run: |
+          Compress-Archive -Path ${{ matrix.platform.artifact_name }} -DestinationPath ${{ matrix.platform.artifact_name }}.zip
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./release/${{ matrix.platform.artifact_name }}.${{ matrix.platform.archive_ext }}
+          asset_name: ${{ matrix.platform.artifact_name }}.${{ matrix.platform.archive_ext }}
+          asset_content_type: application/octet-stream
