@@ -16,7 +16,7 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            url: "127.0.0.1:443".to_string(),
+            url: "gameserver.fri3dl.dev:443".to_string(),
         }
     }
 }
