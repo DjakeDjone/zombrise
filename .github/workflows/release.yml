@@ -1,10 +1,16 @@
 name: Release
 
 on:
+  release:
+    types: [published]
   push:
     tags:
       - "v*.*.*" # Triggers on version tags like v1.0.0
-  workflow_dispatch: # Allows manual triggering
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for release (e.g. v1.0.0)'
+        required: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -157,8 +163,9 @@ jobs:
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ inputs.tag_name }}
           files: ./release/${{ matrix.platform.artifact_name }}.${{ matrix.platform.archive_ext }}
-          name: Dragon Queen ${{ github.ref_name }}
+          name: Dragon Queen ${{ inputs.tag_name || github.ref_name }}
           draft: false
           prerelease: false
         env:
