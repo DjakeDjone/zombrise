@@ -10,16 +10,14 @@ use bevy_replicon_renet::{
     },
     RenetChannelsExt, RepliconRenetPlugins,
 };
-use zombrise_shared::players::player::{
-    DamageFlash, Health, Player, PlayerAttack, PlayerOwner,
-};
-use zombrise_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
-use zombrise_shared::zombie::zombie::Zombie;
 use rand::Rng;
 use std::{
-    net::{Ipv4Addr, SocketAddr, UdpSocket},
+    net::UdpSocket,
     time::{Duration, SystemTime},
 };
+use zombrise_shared::players::player::{DamageFlash, Health, Player, PlayerAttack, PlayerOwner};
+use zombrise_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
+use zombrise_shared::zombie::zombie::Zombie;
 
 #[derive(Resource)]
 struct ZombieSpawnTimer(Timer);
@@ -29,14 +27,12 @@ fn main() {
         .add_plugins(
             DefaultPlugins
                 .build()
-                .disable::<bevy::winit::WinitPlugin>()
-                .disable::<bevy::window::WindowPlugin>()
-                .disable::<bevy::pbr::PbrPlugin>()
                 .disable::<bevy::render::RenderPlugin>()
                 .disable::<bevy::core_pipeline::CorePipelinePlugin>()
                 .disable::<bevy::sprite::SpritePlugin>()
-                .disable::<bevy::text::TextPlugin>()
+                .disable::<bevy::pbr::PbrPlugin>()
                 .disable::<bevy::ui::UiPlugin>()
+                .disable::<bevy::text::TextPlugin>()
                 .disable::<bevy::gizmos::GizmoPlugin>()
                 .disable::<bevy::gltf::GltfPlugin>(),
         )
@@ -240,7 +236,6 @@ fn zombie_movement(
 ) {
     let speed = 2.0;
     let chase_range = 10.0;
-    let mut rng = rand::rng();
 
     for (mut velocity, zombie_transform) in &mut zombie_query {
         let mut nearest_player_pos: Option<Vec3> = None;
@@ -262,18 +257,39 @@ fn zombie_movement(
                 let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
                 velocity.linvel.x = direction.x * speed;
                 velocity.linvel.z = direction.z * speed;
+                // also rotate
+                let rotation = (player_pos - zombie_transform.translation).normalize_or_zero();
+                velocity.angvel.x = rotation.x * speed;
+                velocity.angvel.z = rotation.z * speed;
                 continue;
             }
         }
 
         // Random movement
-        if rng.random_bool(0.02) {
-            let x = rng.random_range(-1.0..1.0);
-            let z = rng.random_range(-1.0..1.0);
-            let dir = Vec3::new(x, 0.0, z).normalize_or_zero();
-            velocity.linvel.x = dir.x * speed * 0.5;
-            velocity.linvel.z = dir.z * speed * 0.5;
+        let change_direction_probability = 0.02;
+        let random_number = rand::random::<f32>();
+        
+        let mut direction = Vec3::ZERO;
+        if velocity.linvel.length_squared() > 0.01 {
+             direction = velocity.linvel.normalize();
         }
+
+        if random_number < change_direction_probability || direction == Vec3::ZERO {
+            // Change direction
+            direction = Vec3::new(
+                rand::random::<f32>() * 2.0 - 1.0,
+                0.0,
+                rand::random::<f32>() * 2.0 - 1.0,
+            )
+            .normalize_or_zero();
+        }
+        
+        // Move forward
+        velocity.linvel.x = direction.x * speed;
+        velocity.linvel.z = direction.z * speed;
+        // also rotate
+        velocity.angvel.x = direction.x * speed;
+        velocity.angvel.z = direction.z * speed;
     }
 }
 
@@ -306,27 +322,46 @@ fn zombie_collision_damage(
 
 fn handle_player_attack(
     mut events: EventReader<FromClient<PlayerAttack>>,
-    player_query: Query<(&PlayerOwner, &Transform), With<Player>>,
+    mut player_query: Query<(Entity, &PlayerOwner, &Transform, &mut Health, &mut DamageFlash), With<Player>>,
     mut zombie_query: Query<(Entity, &Transform), With<Zombie>>,
     mut commands: Commands,
 ) {
     const ATTACK_RANGE: f32 = 2.0;
+    const PLAYER_DAMAGE: f32 = 10.0;
 
     for FromClient { client_id, .. } in events.read() {
+        let mut attacker_pos: Option<Vec3> = None;
+        let mut attacker_entity: Option<Entity> = None;
+
         // Find the attacking player
-        for (owner, player_transform) in &player_query {
+        for (entity, owner, transform, _, _) in &player_query {
             if owner.0 == *client_id {
-                // Find zombies in range
-                for (zombie_entity, zombie_transform) in &mut zombie_query {
-                    let distance = player_transform
-                        .translation
-                        .distance(zombie_transform.translation);
+                attacker_pos = Some(transform.translation);
+                attacker_entity = Some(entity);
+                break;
+            }
+        }
+
+        if let Some(attacker_pos) = attacker_pos {
+            // Attack Zombies
+            for (zombie_entity, zombie_transform) in &mut zombie_query {
+                let distance = attacker_pos.distance(zombie_transform.translation);
+
+                if distance < ATTACK_RANGE {
+                    commands.entity(zombie_entity).despawn();
+                    println!("Player attacked zombie at distance {}", distance);
+                }
+            }
+
+            // Attack other Players
+            for (entity, _, transform, mut health, mut damage_flash) in &mut player_query {
+                if Some(entity) != attacker_entity {
+                    let distance = attacker_pos.distance(transform.translation);
 
                     if distance < ATTACK_RANGE {
-                        // For now, just kill the zombie instantly
-                        // You could add zombie health later
-                        commands.entity(zombie_entity).despawn();
-                        println!("Player attacked zombie at distance {}", distance);
+                        health.current = (health.current - PLAYER_DAMAGE).max(0.0);
+                        damage_flash.timer = 0.3;
+                        println!("Player attacked another player at distance {}", distance);
                     }
                 }
             }
