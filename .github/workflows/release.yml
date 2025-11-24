@@ -3,45 +3,19 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'  # Triggers on version tags like v1.0.0
-  workflow_dispatch:  # Allows manual triggering
+      - "v*.*.*" # Triggers on version tags like v1.0.0
+  workflow_dispatch: # Allows manual triggering
 
 env:
   CARGO_TERM_COLOR: always
   GAME_NAME: dragon_queen
 
 jobs:
-  create-release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      version: ${{ steps.get_version.outputs.version }}
-    steps:
-      - name: Get version from tag
-        id: get_version
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          else
-            echo "version=v0.0.0-dev" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.get_version.outputs.version }}
-          release_name: Dragon Queen ${{ steps.get_version.outputs.version }}
-          draft: false
-          prerelease: false
-
   build-release:
     name: Build ${{ matrix.platform.name }}
-    needs: create-release
     runs-on: ${{ matrix.platform.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -53,7 +27,7 @@ jobs:
             client_binary: dragon_queen_client
             server_binary: dragon_queen_server
             archive_ext: tar.gz
-          
+
           - name: Windows x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -61,7 +35,7 @@ jobs:
             client_binary: dragon_queen_client.exe
             server_binary: dragon_queen_server.exe
             archive_ext: zip
-          
+
           - name: macOS x86_64
             os: macos-latest
             target: x86_64-apple-darwin
@@ -69,7 +43,7 @@ jobs:
             client_binary: dragon_queen_client
             server_binary: dragon_queen_server
             archive_ext: tar.gz
-          
+
           - name: macOS ARM64
             os: macos-latest
             target: aarch64-apple-darwin
@@ -135,15 +109,15 @@ jobs:
           cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.client_binary }} release/${{ matrix.platform.artifact_name }}/
           cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.server_binary }} release/${{ matrix.platform.artifact_name }}/
           cp -r assets release/${{ matrix.platform.artifact_name }}/
-          
+
           # Create README for the release
-          cat > release/${{ matrix.platform.artifact_name }}/README.txt << EOF
-          Dragon Queen ${{ needs.create-release.outputs.version }}
-          
+          cat > release/${{ matrix.platform.artifact_name }}/README.txt << 'EOF'
+          Dragon Queen
+
           To run the game:
           1. Start the server: ./${{ matrix.platform.server_binary }}
           2. Start the client: ./${{ matrix.platform.client_binary }}
-          
+
           The assets folder must be in the same directory as the executables.
           EOF
 
@@ -155,15 +129,15 @@ jobs:
           Copy-Item target/${{ matrix.platform.target }}/release/${{ matrix.platform.client_binary }} release/${{ matrix.platform.artifact_name }}/
           Copy-Item target/${{ matrix.platform.target }}/release/${{ matrix.platform.server_binary }} release/${{ matrix.platform.artifact_name }}/
           Copy-Item -Recurse assets release/${{ matrix.platform.artifact_name }}/
-          
+
           # Create README for the release
           @"
-          Dragon Queen ${{ needs.create-release.outputs.version }}
-          
+          Dragon Queen
+
           To run the game:
           1. Start the server: ${{ matrix.platform.server_binary }}
           2. Start the client: ${{ matrix.platform.client_binary }}
-          
+
           The assets folder must be in the same directory as the executables.
           "@ | Out-File -FilePath release/${{ matrix.platform.artifact_name }}/README.txt
 
@@ -181,11 +155,11 @@ jobs:
           Compress-Archive -Path ${{ matrix.platform.artifact_name }} -DestinationPath ${{ matrix.platform.artifact_name }}.zip
 
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./release/${{ matrix.platform.artifact_name }}.${{ matrix.platform.archive_ext }}
+          name: Dragon Queen ${{ github.ref_name }}
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./release/${{ matrix.platform.artifact_name }}.${{ matrix.platform.archive_ext }}
-          asset_name: ${{ matrix.platform.artifact_name }}.${{ matrix.platform.archive_ext }}
-          asset_content_type: application/octet-stream
