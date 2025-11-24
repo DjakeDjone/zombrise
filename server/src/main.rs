@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy::scene::ScenePlugin;
+
 use bevy::app::ScheduleRunnerPlugin;
 use bevy_rapier3d::prelude::*;
 use bevy_replicon::prelude::*;
@@ -16,7 +16,7 @@ use dragon_queen_shared::zombie::zombie::Zombie;
 use rand::Rng;
 use std::{
     net::{Ipv4Addr, SocketAddr, UdpSocket},
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
 #[derive(Resource)]
@@ -25,7 +25,9 @@ struct ZombieSpawnTimer(Timer);
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(ScheduleRunnerPlugin::default())
+        .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
+            1.0 / 60.0,
+        )))
         .init_asset::<Mesh>()
         .init_asset::<Scene>()
         .add_plugins(RepliconPlugins)
