@@ -18,8 +18,8 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            // url: "127.0.0.1:5000".to_string(),
-            url: "138.199.203.159:5000".to_string(),
+            url: "127.0.0.1:5000".to_string(),
+            // url: "138.199.203.159:5000".to_string(),
         }
     }
 }

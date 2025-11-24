@@ -103,12 +103,12 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     commands.insert_resource(server);
     commands.insert_resource(transport);
 
-    // Add ground
+    // Add ground (flat surface)
     commands.spawn((
         MapMarker,
         Replicated,
         SpatialBundle::from_transform(Transform::from_xyz(0.0, -0.55, 0.0)),
-        Collider::cylinder(0.05, 28.0),
+        Collider::cuboid(28.0, 0.05, 28.0), // Flat ground: 56x0.1x56 units
     ));
 
     // Spawn trees with collision
@@ -146,7 +146,7 @@ fn server_event_system(mut commands: Commands, mut server_events: EventReader<Se
                     Health::default(),
                     DamageFlash::default(),
                     Replicated,
-                    Transform::from_xyz(0.0, 3.0, 0.0),
+                    Transform::from_xyz(0.0, 1.0, 0.0),
                     GlobalTransform::default(),
                     RigidBody::Dynamic,
                     Collider::capsule_y(0.5, 0.5),
@@ -219,7 +219,7 @@ fn spawn_zombies(mut commands: Commands, time: Res<Time>, mut timer: ResMut<Zomb
         commands.spawn((
             Zombie,
             Replicated,
-            Transform::from_xyz(x, 5.0, z),
+            Transform::from_xyz(x, 1.0, z),
             GlobalTransform::default(),
             RigidBody::Dynamic,
             Collider::capsule_y(0.5, 0.5),
