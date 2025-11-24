@@ -360,23 +360,137 @@ fn animate_player_damage(
     }
 }
 
+// Component to mark the health UI elements
+#[derive(Component)]
+struct HealthBarUI;
+
+#[derive(Component)]
+struct HealthBarFill;
+
+#[derive(Component)]
+struct HealthText;
+
 fn display_health_bar(
+    mut commands: Commands,
     player_query: Query<(&Health, &PlayerOwner), With<Player>>,
     my_client_id: Res<MyClientId>,
+    health_ui_query: Query<Entity, With<HealthBarUI>>,
+    mut health_fill_query: Query<(&mut Style, &mut BackgroundColor), (With<HealthBarFill>, Without<HealthText>)>,
+    mut health_text_query: Query<&mut Text, With<HealthText>>,
 ) {
+    // Find our player's health
+    let mut our_health: Option<&Health> = None;
     for (health, owner) in player_query.iter() {
-        // Only display our own player's health
         if owner.0.get() == my_client_id.0 {
-            // Simple console-based health display for now
-            // You could enhance this with a UI overlay later
-            if health.current != health.max {
-                println!(
-                    "Health: {:.1}/{:.1} ({}%)",
-                    health.current,
-                    health.max,
-                    (health.current / health.max * 100.0) as i32
-                );
-            }
+            our_health = Some(health);
+            break;
+        }
+    }
+
+    // If we have health data and no UI exists, create it
+    if our_health.is_some() && health_ui_query.is_empty() {
+        // Create health bar UI
+        commands
+            .spawn((
+                NodeBundle {
+                    style: Style {
+                        position_type: PositionType::Absolute,
+                        left: Val::Px(20.0),
+                        top: Val::Px(20.0),
+                        width: Val::Px(300.0),
+                        height: Val::Px(50.0),
+                        flex_direction: FlexDirection::Column,
+                        ..default()
+                    },
+                    ..default()
+                },
+                HealthBarUI,
+            ))
+            .with_children(|parent| {
+                // Health text
+                parent.spawn((
+                    TextBundle::from_section(
+                        "Health: 100/100 (100%)",
+                        TextStyle {
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                            ..default()
+                        },
+                    )
+                    .with_style(Style {
+                        margin: UiRect::bottom(Val::Px(5.0)),
+                        ..default()
+                    }),
+                    HealthText,
+                ));
+
+                // Health bar background
+                parent
+                    .spawn(NodeBundle {
+                        style: Style {
+                            width: Val::Px(300.0),
+                            height: Val::Px(20.0),
+                            border: UiRect::all(Val::Px(2.0)),
+                            ..default()
+                        },
+                        background_color: Color::srgb(0.2, 0.2, 0.2).into(),
+                        border_color: Color::srgb(0.8, 0.8, 0.8).into(),
+                        ..default()
+                    })
+                    .with_children(|parent| {
+                        // Health bar fill
+                        parent.spawn((
+                            NodeBundle {
+                                style: Style {
+                                    width: Val::Percent(100.0),
+                                    height: Val::Percent(100.0),
+                                    ..default()
+                                },
+                                background_color: Color::srgb(0.2, 0.8, 0.2).into(),
+                                ..default()
+                            },
+                            HealthBarFill,
+                        ));
+                    });
+            });
+    }
+
+    // Update health bar if it exists
+    if let Some(health) = our_health {
+        let health_percent = (health.current / health.max * 100.0).max(0.0);
+        
+        // Determine color based on health percentage
+        let bar_color = if health_percent > 60.0 {
+            Color::srgb(0.2, 0.8, 0.2) // Green
+        } else if health_percent > 30.0 {
+            Color::srgb(1.0, 0.8, 0.0) // Yellow
+        } else {
+            Color::srgb(1.0, 0.2, 0.2) // Red
+        };
+        
+        // Update health bar fill width and color
+        if let Ok((mut style, mut bg_color)) = health_fill_query.get_single_mut() {
+            style.width = Val::Percent(health_percent);
+            *bg_color = bar_color.into();
+        }
+
+        // Update health text
+        if let Ok(mut text) = health_text_query.get_single_mut() {
+            text.sections[0].value = format!(
+                "Health: {:.0}/{:.0} ({:.0}%)",
+                health.current,
+                health.max,
+                health_percent
+            );
+            
+            // Change text color based on health percentage
+            text.sections[0].style.color = if health_percent > 60.0 {
+                Color::srgb(0.2, 1.0, 0.2) // Green
+            } else if health_percent > 30.0 {
+                Color::srgb(1.0, 0.8, 0.0) // Yellow
+            } else {
+                Color::srgb(1.0, 0.2, 0.2) // Red
+            };
         }
     }
 }
