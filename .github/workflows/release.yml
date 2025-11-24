@@ -114,7 +114,14 @@ jobs:
           mkdir -p release/${{ matrix.platform.artifact_name }}
           cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.client_binary }} release/${{ matrix.platform.artifact_name }}/
           cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.server_binary }} release/${{ matrix.platform.artifact_name }}/
-          cp -r assets release/${{ matrix.platform.artifact_name }}/
+          # Copy assets from root assets/ if present, otherwise fall back to client/assets
+          if [ -d assets ]; then
+            cp -r assets release/${{ matrix.platform.artifact_name }}/
+          elif [ -d client/assets ]; then
+            cp -r client/assets release/${{ matrix.platform.artifact_name }}/assets
+          else
+            echo "Warning: assets not found in 'assets/' or 'client/assets'. Release will not include assets."
+          fi
 
           # Create README for the release
           cat > release/${{ matrix.platform.artifact_name }}/README.txt << 'EOF'
@@ -134,7 +141,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path release/${{ matrix.platform.artifact_name }}
           Copy-Item target/${{ matrix.platform.target }}/release/${{ matrix.platform.client_binary }} release/${{ matrix.platform.artifact_name }}/
           Copy-Item target/${{ matrix.platform.target }}/release/${{ matrix.platform.server_binary }} release/${{ matrix.platform.artifact_name }}/
-          Copy-Item -Recurse assets release/${{ matrix.platform.artifact_name }}/
+          # Copy assets from root assets/ if present, otherwise fall back to client/assets
+          if (Test-Path -Path 'assets') {
+            Copy-Item -Recurse assets release/${{ matrix.platform.artifact_name }}/
+          } elseif (Test-Path -Path 'client/assets') {
+            Copy-Item -Recurse client/assets (Join-Path "release/${{ matrix.platform.artifact_name }}" "assets")
+          } else {
+            Write-Warning "assets not found in 'assets' or 'client/assets'. Release will not include assets."
+          }
 
           # Create README for the release
           @"
