@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 zombrise_shared = { path = "../shared" }
 # Headless server - no graphics features needed
-bevy = { version = "0.14", default-features = false, features = ["bevy_asset", "bevy_scene", "serialize", "bevy_state"] }
+bevy = { version = "0.14", default-features = false, features = ["bevy_asset", "bevy_scene", "serialize", "bevy_state", "bevy_render", "bevy_core_pipeline", "bevy_sprite", "bevy_pbr", "bevy_ui", "bevy_text", "bevy_gizmos", "bevy_gltf"] }
 bevy_replicon = "0.28"
 bevy_replicon_renet = "0.5"
 bevy_rapier3d = { version = "0.27", default-features = false, features = ["dim3", "simd-stable"] }

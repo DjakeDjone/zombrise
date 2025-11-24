@@ -1,8 +1,7 @@
-use bevy::prelude::*;
 use bevy::input::keyboard::KeyboardInput;
+use bevy::prelude::*;
 use bevy_simple_text_input::{
     TextInputBundle, TextInputSettings, TextInputSubmitEvent, TextInputTextStyle, TextInputValue,
-    TextInputInactive,
 };
 
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -20,8 +19,8 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            // url: "127.0.0.1:5000".to_string(),
-            url: "138.199.203.159:5000".to_string(),
+            url: "127.0.0.1:5000".to_string(),
+            // url: "138.199.203.159:5000".to_string(),
         }
     }
 }
@@ -200,7 +199,7 @@ pub fn handle_copy_paste(
     mut evr_kbd: EventReader<KeyboardInput>,
 ) {
     // Check if Ctrl (or Cmd on Mac) is pressed
-    let ctrl_pressed = keyboard_input.pressed(KeyCode::ControlLeft) 
+    let ctrl_pressed = keyboard_input.pressed(KeyCode::ControlLeft)
         || keyboard_input.pressed(KeyCode::ControlRight)
         || keyboard_input.pressed(KeyCode::SuperLeft)
         || keyboard_input.pressed(KeyCode::SuperRight);
