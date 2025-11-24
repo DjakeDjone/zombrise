@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name for release (e.g. v1.0.0)'
+        description: "Tag name for release (e.g. v1.0.0)"
         required: true
 
 env:
@@ -42,21 +42,21 @@ jobs:
             server_binary: zombrise_server.exe
             archive_ext: zip
 
-          - name: macOS x86_64
-            os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_name: zombrise-macos-x86_64
-            client_binary: zombrise_client
-            server_binary: zombrise_server
-            archive_ext: tar.gz
+          # - name: macOS x86_64
+          #   os: macos-latest
+          #   target: x86_64-apple-darwin
+          #   artifact_name: zombrise-macos-x86_64
+          #   client_binary: zombrise_client
+          #   server_binary: zombrise_server
+          #   archive_ext: tar.gz
 
-          - name: macOS ARM64
-            os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_name: zombrise-macos-arm64
-            client_binary: zombrise_client
-            server_binary: zombrise_server
-            archive_ext: tar.gz
+          # - name: macOS ARM64
+          #   os: macos-latest
+          #   target: aarch64-apple-darwin
+          #   artifact_name: zombrise-macos-arm64
+          #   client_binary: zombrise_client
+          #   server_binary: zombrise_server
+          #   archive_ext: tar.gz
 
     steps:
       - name: Checkout code
