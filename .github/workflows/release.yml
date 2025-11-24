@@ -78,35 +78,13 @@ jobs:
             libxkbcommon-dev \
             pkg-config
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
+          key: ${{ matrix.platform.target }}
 
-      - name: Cache Cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-git-
-
-      - name: Cache target directory
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-${{ matrix.platform.target }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.platform.target }}-cargo-target-
-
-      - name: Build client
-        run: cargo build --release --bin zombrise_client --target ${{ matrix.platform.target }}
-
-      - name: Build server
-        run: cargo build --release --bin zombrise_server --target ${{ matrix.platform.target }}
+      - name: Build binaries
+        run: cargo build --release --bin zombrise_client --bin zombrise_server --target ${{ matrix.platform.target }}
 
       - name: Prepare release directory (Unix)
         if: matrix.platform.os != 'windows-latest'
