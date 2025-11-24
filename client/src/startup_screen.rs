@@ -1,6 +1,8 @@
 use bevy::prelude::*;
+use bevy::input::keyboard::KeyboardInput;
 use bevy_simple_text_input::{
     TextInputBundle, TextInputSettings, TextInputSubmitEvent, TextInputTextStyle, TextInputValue,
+    TextInputInactive,
 };
 
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -188,6 +190,66 @@ pub fn handle_startup_ui(
         if let Ok(input_value) = input_query.get(event.entity) {
             server_config.url = input_value.0.clone();
             next_state.set(AppState::Playing);
+        }
+    }
+}
+
+pub fn handle_copy_paste(
+    mut input_query: Query<&mut TextInputValue, With<ServerUrlInput>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut evr_kbd: EventReader<KeyboardInput>,
+) {
+    // Check if Ctrl (or Cmd on Mac) is pressed
+    let ctrl_pressed = keyboard_input.pressed(KeyCode::ControlLeft) 
+        || keyboard_input.pressed(KeyCode::ControlRight)
+        || keyboard_input.pressed(KeyCode::SuperLeft)
+        || keyboard_input.pressed(KeyCode::SuperRight);
+
+    if !ctrl_pressed {
+        return;
+    }
+
+    // Process keyboard events
+    for ev in evr_kbd.read() {
+        if !ev.state.is_pressed() {
+            continue;
+        }
+
+        if let Ok(mut input_value) = input_query.get_single_mut() {
+            match ev.key_code {
+                // Copy: Ctrl+C
+                KeyCode::KeyC => {
+                    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                        if let Err(e) = clipboard.set_text(&input_value.0) {
+                            eprintln!("Failed to copy to clipboard: {}", e);
+                        }
+                    }
+                }
+                // Paste: Ctrl+V
+                KeyCode::KeyV => {
+                    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                        if let Ok(text) = clipboard.get_text() {
+                            input_value.0 = text;
+                        }
+                    }
+                }
+                // Cut: Ctrl+X
+                KeyCode::KeyX => {
+                    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                        if let Err(e) = clipboard.set_text(&input_value.0) {
+                            eprintln!("Failed to cut to clipboard: {}", e);
+                        } else {
+                            input_value.0.clear();
+                        }
+                    }
+                }
+                // Select All: Ctrl+A (just for completeness, though selection isn't visible)
+                KeyCode::KeyA => {
+                    // The text input doesn't support visible selection,
+                    // but we can at least acknowledge the shortcut
+                }
+                _ => {}
+            }
         }
     }
 }

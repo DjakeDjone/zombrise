@@ -26,6 +26,7 @@ use map::{SnowLandscapeConfig, spawn_snow_landscape};
 mod startup_screen;
 use startup_screen::{
     AppState, ServerConfig, cleanup_startup_screen, handle_startup_ui, show_startup_screen,
+    handle_copy_paste,
 };
 
 mod death_screen;
@@ -53,7 +54,7 @@ fn main() {
         .add_systems(OnExit(AppState::StartupScreen), cleanup_startup_screen)
         .add_systems(
             Update,
-            handle_startup_ui.run_if(in_state(AppState::StartupScreen)),
+            (handle_startup_ui, handle_copy_paste).run_if(in_state(AppState::StartupScreen)),
         )
         .add_systems(
             OnEnter(AppState::Playing),
@@ -74,6 +75,7 @@ fn main() {
                 detect_player_death,
                 show_death_screen,
                 handle_death_screen_input,
+                handle_escape_key,
             )
                 .run_if(in_state(AppState::Playing)),
         )
@@ -328,6 +330,18 @@ fn lock_cursor(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
     if let Ok(mut window) = window_query.get_single_mut() {
         window.cursor.grab_mode = CursorGrabMode::Locked;
         window.cursor.visible = false;
+    }
+}
+
+fn handle_escape_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
+) {
+    if keys.just_pressed(KeyCode::Escape) {
+        if let Ok(mut window) = window_query.get_single_mut() {
+            window.cursor.grab_mode = CursorGrabMode::None;
+            window.cursor.visible = true;
+        }
     }
 }
 
