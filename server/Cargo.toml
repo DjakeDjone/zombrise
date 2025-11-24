@@ -6,13 +6,10 @@ edition = "2021"
 [dependencies]
 dragon_queen_shared = { path = "../shared" }
 # Headless server - no graphics features needed
-bevy = { version = "0.14", default-features = false, features = ["bevy_asset", "bevy_scene", "serialize", "bevy_state"] }
+bevy = { version = "0.14", default-features = false, features = ["bevy_asset", "bevy_scene", "serialize", "bevy_state", "bevy_render"] }
 bevy_replicon = "0.28"
 bevy_replicon_renet = "0.5"
 bevy_rapier3d = { version = "0.27", default-features = false, features = ["dim3", "simd-stable"] }
 rand = "0.9.2"
 
-# Override winit to disable all windowing backends (prevents Wayland dependency)
-[dependencies.winit]
-version = "0.30"
-default-features = false
+

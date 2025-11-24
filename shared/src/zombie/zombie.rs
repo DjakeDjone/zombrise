@@ -5,9 +5,11 @@ use serde::{Deserialize, Serialize};
 #[reflect(Component)]
 pub struct Zombie;
 
+#[cfg(feature = "client")]
 #[derive(Component)]
 pub struct ZombieAnimations(pub Vec<AnimationNodeIndex>);
 
+#[cfg(feature = "client")]
 pub fn spawn_zombie(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn(SceneBundle {
@@ -18,6 +20,7 @@ pub fn spawn_zombie(mut commands: Commands, asset_server: Res<AssetServer>) {
         .insert(Zombie);
 }
 
+#[cfg(feature = "client")]
 pub fn setup_zombie_animation(
     mut commands: Commands,
     mut animation_players: Query<(Entity, &mut AnimationPlayer), Added<AnimationPlayer>>,
@@ -42,6 +45,7 @@ pub fn setup_zombie_animation(
     }
 }
 
+#[cfg(feature = "client")]
 pub fn control_zombie_animation(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut animation_players: Query<(&mut AnimationPlayer, &ZombieAnimations)>,
