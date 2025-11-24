@@ -1,5 +1,7 @@
 use bevy::prelude::*;
-use bevy_simple_text_input::{TextInputBundle, TextInputSettings, TextInputSubmitEvent, TextInputValue, TextInputTextStyle};
+use bevy_simple_text_input::{
+    TextInputBundle, TextInputSettings, TextInputSubmitEvent, TextInputTextStyle, TextInputValue,
+};
 
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum AppState {
@@ -17,8 +19,7 @@ impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             // url: "127.0.0.1:5000".to_string(),
-            url: "gameserver.fri3dl.dev:443".to_string(),
-            // url: "138.199.203.159:443".to_string(),
+            url: "138.199.203.159:5000".to_string(),
         }
     }
 }
