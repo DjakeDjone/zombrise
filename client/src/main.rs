@@ -1,36 +1,38 @@
 use bevy::input::mouse::MouseMotion;
-use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
+use bevy::prelude::*;
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet::{
-    RenetChannelsExt, RepliconRenetPlugins,
     renet::{
-        ConnectionConfig, RenetClient,
         transport::{ClientAuthentication, NetcodeClientTransport},
+        ConnectionConfig, RenetClient,
     },
+    RenetChannelsExt, RepliconRenetPlugins,
 };
 use bevy_simple_text_input::TextInputPlugin;
 use dragon_queen_shared::players::player::{
-    CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner, handle_input,
+    handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
 };
 use dragon_queen_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
-use dragon_queen_shared::zombie::zombie::Zombie;
+use dragon_queen_shared::zombie::zombie::{
+    setup_zombie_animation, Zombie, ZombieAnimations,
+};
 use std::{
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
     time::SystemTime,
 };
 
 mod map;
-use map::{SnowLandscapeConfig, spawn_snow_landscape};
+use map::{spawn_snow_landscape, SnowLandscapeConfig};
 
 mod startup_screen;
 use startup_screen::{
-    AppState, ServerConfig, cleanup_startup_screen, handle_startup_ui, show_startup_screen,
-    handle_copy_paste,
+    cleanup_startup_screen, handle_copy_paste, handle_startup_ui, show_startup_screen, AppState,
+    ServerConfig,
 };
 
 mod death_screen;
-use death_screen::{PlayerDied, detect_player_death, handle_death_screen_input, show_death_screen};
+use death_screen::{detect_player_death, handle_death_screen_input, show_death_screen, PlayerDied};
 
 #[derive(Resource)]
 pub struct MyClientId(pub u64);
@@ -69,6 +71,7 @@ fn main() {
                 spawn_player_visuals,
                 spawn_map_visuals,
                 spawn_zombie_visuals,
+                setup_zombie_animation,
                 spawn_tree_visuals,
                 animate_player_damage,
                 display_health_bar,
@@ -101,22 +104,19 @@ fn setup_client(
         .unwrap();
     let client_id = current_time.as_millis() as u64;
 
-    // Parse server address from config - supports both domain names and IP addresses
-    // Expected format: "domain.com:port" or "IP:port"
-    // Prefer IPv4 addresses to avoid IPv6 connectivity issues
     let server_addr: SocketAddr = server_config
         .url
         .to_socket_addrs()
         .expect("Failed to resolve server address")
-        .find(|addr| addr.is_ipv4())  // Prefer IPv4
+        .find(|addr| addr.is_ipv4()) // Prefer IPv4
         .or_else(|| {
             // Fallback to any address if no IPv4 found
             server_config.url.to_socket_addrs().ok()?.next()
         })
         .expect("No address found for server");
-    
+
     println!("Connecting to server at: {}", server_addr);
-    
+
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let authentication = ClientAuthentication::Unsecure {
         client_id,
@@ -271,13 +271,12 @@ fn spawn_player_visuals(
 fn spawn_zombie_visuals(
     mut commands: Commands,
     query: Query<Entity, Added<Zombie>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
 ) {
     for entity in query.iter() {
-        commands.entity(entity).insert(PbrBundle {
-            mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-            material: materials.add(Color::srgb(0.2, 0.8, 0.2)),
+        commands.entity(entity).insert(SceneBundle {
+            scene: asset_server.load("zombie.glb#Scene0"),
+            transform: Transform::from_scale(Vec3::splat(1.0)),
             ..default()
         });
     }
@@ -389,7 +388,10 @@ fn display_health_bar(
     player_query: Query<(&Health, &PlayerOwner), With<Player>>,
     my_client_id: Res<MyClientId>,
     health_ui_query: Query<Entity, With<HealthBarUI>>,
-    mut health_fill_query: Query<(&mut Style, &mut BackgroundColor), (With<HealthBarFill>, Without<HealthText>)>,
+    mut health_fill_query: Query<
+        (&mut Style, &mut BackgroundColor),
+        (With<HealthBarFill>, Without<HealthText>),
+    >,
     mut health_text_query: Query<&mut Text, With<HealthText>>,
 ) {
     // Find our player's health
@@ -472,7 +474,7 @@ fn display_health_bar(
     // Update health bar if it exists
     if let Some(health) = our_health {
         let health_percent = (health.current / health.max * 100.0).max(0.0);
-        
+
         // Determine color based on health percentage
         let bar_color = if health_percent > 60.0 {
             Color::srgb(0.2, 0.8, 0.2) // Green
@@ -481,7 +483,7 @@ fn display_health_bar(
         } else {
             Color::srgb(1.0, 0.2, 0.2) // Red
         };
-        
+
         // Update health bar fill width and color
         if let Ok((mut style, mut bg_color)) = health_fill_query.get_single_mut() {
             style.width = Val::Percent(health_percent);
@@ -492,11 +494,9 @@ fn display_health_bar(
         if let Ok(mut text) = health_text_query.get_single_mut() {
             text.sections[0].value = format!(
                 "Health: {:.0}/{:.0} ({:.0}%)",
-                health.current,
-                health.max,
-                health_percent
+                health.current, health.max, health_percent
             );
-            
+
             // Change text color based on health percentage
             text.sections[0].style.color = if health_percent > 60.0 {
                 Color::srgb(0.2, 1.0, 0.2) // Green
