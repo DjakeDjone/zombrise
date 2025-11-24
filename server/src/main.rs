@@ -28,7 +28,15 @@ fn main() {
             DefaultPlugins
                 .build()
                 .disable::<bevy::winit::WinitPlugin>()
-                .disable::<bevy::window::WindowPlugin>(),
+                .disable::<bevy::window::WindowPlugin>()
+                .disable::<bevy::pbr::PbrPlugin>()
+                .disable::<bevy::render::RenderPlugin>()
+                .disable::<bevy::core_pipeline::CorePipelinePlugin>()
+                .disable::<bevy::sprite::SpritePlugin>()
+                .disable::<bevy::text::TextPlugin>()
+                .disable::<bevy::ui::UiPlugin>()
+                .disable::<bevy::gizmos::GizmoPlugin>()
+                .disable::<bevy::gltf::GltfPlugin>(),
         )
         .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
             1.0 / 60.0,
