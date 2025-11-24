@@ -1,0 +1,19 @@
+[Unit]
+Description=Dragon Queen 3D Game Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/dragon_queen_3d
+ExecStart=/root/dragon_queen_3d/target/release/dragon_queen_server
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits (optional)
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
