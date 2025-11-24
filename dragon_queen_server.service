@@ -1,12 +1,12 @@
 [Unit]
-Description=Dragon Queen 3D Game Server
+Description=Zombrise 3D Game Server
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/dragon_queen_3d
-ExecStart=/root/dragon_queen_3d/target/release/dragon_queen_server
+WorkingDirectory=/root/zombrise_3d
+ExecStart=/root/zombrise_3d/target/release/zombrise_server
 Restart=always
 RestartSec=10
 StandardOutput=journal

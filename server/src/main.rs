@@ -10,11 +10,11 @@ use bevy_replicon_renet::{
     },
     RenetChannelsExt, RepliconRenetPlugins,
 };
-use dragon_queen_shared::players::player::{
+use zombrise_shared::players::player::{
     DamageFlash, Health, Player, PlayerAttack, PlayerOwner,
 };
-use dragon_queen_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
-use dragon_queen_shared::zombie::zombie::Zombie;
+use zombrise_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
+use zombrise_shared::zombie::zombie::Zombie;
 use rand::Rng;
 use std::{
     net::{Ipv4Addr, SocketAddr, UdpSocket},

@@ -14,7 +14,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  GAME_NAME: dragon_queen
+  GAME_NAME: zombrise
 
 jobs:
   build-release:
@@ -29,33 +29,33 @@ jobs:
           - name: Linux x86_64
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: dragon_queen-linux-x86_64
-            client_binary: dragon_queen_client
-            server_binary: dragon_queen_server
+            artifact_name: zombrise-linux-x86_64
+            client_binary: zombrise_client
+            server_binary: zombrise_server
             archive_ext: tar.gz
 
           - name: Windows x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: dragon_queen-windows-x86_64
-            client_binary: dragon_queen_client.exe
-            server_binary: dragon_queen_server.exe
+            artifact_name: zombrise-windows-x86_64
+            client_binary: zombrise_client.exe
+            server_binary: zombrise_server.exe
             archive_ext: zip
 
           - name: macOS x86_64
             os: macos-latest
             target: x86_64-apple-darwin
-            artifact_name: dragon_queen-macos-x86_64
-            client_binary: dragon_queen_client
-            server_binary: dragon_queen_server
+            artifact_name: zombrise-macos-x86_64
+            client_binary: zombrise_client
+            server_binary: zombrise_server
             archive_ext: tar.gz
 
           - name: macOS ARM64
             os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: dragon_queen-macos-arm64
-            client_binary: dragon_queen_client
-            server_binary: dragon_queen_server
+            artifact_name: zombrise-macos-arm64
+            client_binary: zombrise_client
+            server_binary: zombrise_server
             archive_ext: tar.gz
 
     steps:
@@ -103,10 +103,10 @@ jobs:
             ${{ runner.os }}-${{ matrix.platform.target }}-cargo-target-
 
       - name: Build client
-        run: cargo build --release --bin dragon_queen_client --target ${{ matrix.platform.target }}
+        run: cargo build --release --bin zombrise_client --target ${{ matrix.platform.target }}
 
       - name: Build server
-        run: cargo build --release --bin dragon_queen_server --target ${{ matrix.platform.target }}
+        run: cargo build --release --bin zombrise_server --target ${{ matrix.platform.target }}
 
       - name: Prepare release directory (Unix)
         if: matrix.platform.os != 'windows-latest'
@@ -118,7 +118,7 @@ jobs:
 
           # Create README for the release
           cat > release/${{ matrix.platform.artifact_name }}/README.txt << 'EOF'
-          Dragon Queen
+          Zombrise
 
           To run the game:
           1. Start the server: ./${{ matrix.platform.server_binary }}
@@ -138,7 +138,7 @@ jobs:
 
           # Create README for the release
           @"
-          Dragon Queen
+          Zombrise
 
           To run the game:
           1. Start the server: ${{ matrix.platform.server_binary }}
@@ -165,7 +165,7 @@ jobs:
         with:
           tag_name: ${{ inputs.tag_name }}
           files: ./release/${{ matrix.platform.artifact_name }}.${{ matrix.platform.archive_ext }}
-          name: Dragon Queen ${{ inputs.tag_name || github.ref_name }}
+          name: Zombrise ${{ inputs.tag_name || github.ref_name }}
           draft: false
           prerelease: false
         env:
