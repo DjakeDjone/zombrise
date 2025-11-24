@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::scene::ScenePlugin;
+use bevy::app::ScheduleRunnerPlugin;
 use bevy_rapier3d::prelude::*;
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet::{
@@ -23,11 +24,8 @@ struct ZombieSpawnTimer(Timer);
 
 fn main() {
     App::new()
-        .add_plugins(MinimalPlugins)
-        .add_plugins(AssetPlugin::default())
-        .add_plugins(HierarchyPlugin)
-        .add_plugins(TransformPlugin)
-        .add_plugins(ScenePlugin)
+        .add_plugins(DefaultPlugins)
+        .add_plugins(ScheduleRunnerPlugin::default())
         .init_asset::<Mesh>()
         .init_asset::<Scene>()
         .add_plugins(RepliconPlugins)
