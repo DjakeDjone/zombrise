@@ -4,13 +4,15 @@ use bevy::app::ScheduleRunnerPlugin;
 use bevy_rapier3d::prelude::*;
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet::{
-    RenetChannelsExt, RepliconRenetPlugins,
     renet::{
-        ConnectionConfig, RenetServer,
         transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig},
+        ConnectionConfig, RenetServer,
     },
+    RenetChannelsExt, RepliconRenetPlugins,
 };
-use dragon_queen_shared::players::player::{DamageFlash, Health, Player, PlayerAttack, PlayerOwner};
+use dragon_queen_shared::players::player::{
+    DamageFlash, Health, Player, PlayerAttack, PlayerOwner,
+};
 use dragon_queen_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
 use dragon_queen_shared::zombie::zombie::Zombie;
 use rand::Rng;
@@ -84,13 +86,15 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     let current_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    let public_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 5000);
+
+    let public_addr = "0.0.0.0:5000";
     let socket = UdpSocket::bind(public_addr).unwrap();
+
     let server_config = ServerConfig {
         current_time,
         max_clients: 10,
         protocol_id: 0,
-        public_addresses: vec![public_addr],
+        public_addresses: vec![public_addr.parse().unwrap()],
         authentication: ServerAuthentication::Unsecure,
     };
 
