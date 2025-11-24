@@ -1,10 +1,10 @@
 [package]
-name = "dragon_queen_server"
+name = "zombrise_server"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-dragon_queen_shared = { path = "../shared" }
+zombrise_shared = { path = "../shared" }
 # Headless server - no graphics features needed
 bevy = { version = "0.14", default-features = false, features = ["bevy_asset", "bevy_scene", "serialize", "bevy_state"] }
 bevy_replicon = "0.28"

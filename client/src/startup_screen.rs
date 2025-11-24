@@ -20,8 +20,8 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            url: "127.0.0.1:5000".to_string(),
-            // url: "138.199.203.159:5000".to_string(),
+            // url: "127.0.0.1:5000".to_string(),
+            url: "138.199.203.159:5000".to_string(),
         }
     }
 }
@@ -56,7 +56,7 @@ pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConf
             // Title
             parent.spawn(
                 TextBundle::from_section(
-                    "Dragon Queen 3D",
+                    "Zombrise 3D",
                     TextStyle {
                         font_size: 60.0,
                         color: Color::srgb(0.9, 0.8, 0.3),

@@ -1,10 +1,10 @@
 [package]
-name = "dragon_queen_client"
+name = "zombrise_client"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-dragon_queen_shared = { path = "../shared", features = ["client"] }
+zombrise_shared = { path = "../shared", features = ["client"] }
 bevy = { version = "0.14", default-features = false, features = ["bevy_asset", "bevy_scene", "bevy_gltf", "serialize", "animation", "bevy_ui", "bevy_winit", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "bevy_text", "bevy_sprite", "png", "jpeg", "tonemapping_luts", "default_font", "x11", "wayland", "bevy_state"] }
 bevy_replicon = "0.28"
 bevy_replicon_renet = "0.5"
