@@ -14,14 +14,24 @@ pub fn detect_player_death(
     client_id: Res<crate::MyClientId>,
     mut player_died: ResMut<PlayerDied>,
 ) {
-    // Check if our player exists and has health <= 0
-    for (health, owner) in player_query.iter() {
-        if owner.0.get() == client_id.0 {
-            if health.current <= 0.0 && !player_died.0 {
-                player_died.0 = true;
-                info!("Player died!");
-            }
-            return;
+    // Try to find our player
+    let our_player = player_query.iter().find(|(_, owner)| owner.0.get() == client_id.0);
+    
+    if let Some((health, _)) = our_player {
+        // Player exists - check health status
+        if health.current <= 0.0 && !player_died.0 {
+            player_died.0 = true;
+            info!("Player died - health reached zero!");
+        } else if health.current > 0.0 && player_died.0 {
+            // Player has respawned or reconnected with health
+            player_died.0 = false;
+            info!("Player respawned!");
+        }
+    } else {
+        // Player entity not found - they were despawned from the server
+        if !player_died.0 {
+            player_died.0 = true;
+            info!("Player died - entity was despawned from server!");
         }
     }
 }
@@ -112,6 +122,17 @@ pub fn show_death_screen(
                     }),
                 );
             });
+    } else if !player_died.0 && !death_screen_query.is_empty() {
+        // Player has respawned - clean up death screen
+        for entity in death_screen_query.iter() {
+            commands.entity(entity).despawn_recursive();
+        }
+        
+        // Re-lock cursor
+        if let Ok(mut window) = window_query.get_single_mut() {
+            window.cursor.grab_mode = CursorGrabMode::Locked;
+            window.cursor.visible = false;
+        }
     }
 }
 
