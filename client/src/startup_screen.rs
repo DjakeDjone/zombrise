@@ -1,7 +1,5 @@
 use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
-use bevy::text::prelude::*;
-use bevy::ui::prelude::*;
 use bevy_simple_text_input::{
     TextInput, TextInputSettings, TextInputSubmitEvent, TextInputTextFont, TextInputValue, TextInputTextColor,
 };
