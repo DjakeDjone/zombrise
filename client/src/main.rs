@@ -3,8 +3,6 @@ use bevy::input::mouse::MouseMotion;
 use bevy::pbr::prelude::*;
 use bevy::prelude::*;
 use bevy::scene::SceneRoot;
-use bevy::text::prelude::*;
-use bevy::ui::prelude::*;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet2::{
@@ -24,7 +22,7 @@ use zombrise_shared::players::player::{
     handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
 };
 use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
-use zombrise_shared::zombie::zombie::{setup_zombie_animation, Zombie, ZombieAnimations};
+use zombrise_shared::zombie::zombie::{setup_zombie_animation, Zombie};
 
 mod map;
 use map::{spawn_snow_landscape, SnowLandscapeConfig};
@@ -65,6 +63,10 @@ fn main() {
         .add_systems(
             OnEnter(AppState::Playing),
             (setup, setup_client, lock_cursor),
+        )
+        .add_systems(
+            OnExit(AppState::Playing),
+            cleanup_playing_state,
         )
         .add_systems(
             Update,
@@ -171,14 +173,25 @@ fn setup(mut commands: Commands) {
     ));
 }
 
+fn cleanup_playing_state(
+    mut commands: Commands,
+    health_ui_query: Query<Entity, With<HealthBarUI>>,
+) {
+    // Clean up health bar UI
+    for entity in health_ui_query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
 fn spawn_map_visuals(
     mut commands: Commands,
-    query: Query<Entity, Added<MapMarker>>,
+    query: Query<Entity, (Added<MapMarker>, Without<MapVisualsSpawned>)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for entity in query.iter() {
-        commands.entity(entity).insert((Transform::default(), Visibility::default()));
+        // Don't insert Transform - it's already replicated from server
+        commands.entity(entity).insert((Visibility::default(), MapVisualsSpawned));
         // Spawn landscape without trees (trees come from server)
         spawn_snow_landscape(
             &mut commands,
@@ -192,7 +205,7 @@ fn spawn_map_visuals(
 
 fn spawn_tree_visuals(
     mut commands: Commands,
-    query: Query<(Entity, &Transform), Added<TreeMarker>>,
+    query: Query<(Entity, &Transform), (Added<TreeMarker>, Without<TreeVisualsSpawned>)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -215,17 +228,16 @@ fn spawn_tree_visuals(
     let trunk_mesh = meshes.add(Cylinder::new(0.12, 1.9));
     let canopy_mesh = meshes.add(Sphere::new(0.9));
 
-    for (entity, transform) in query.iter() {
-        let trunk_transform =
-            Transform::from_translation(transform.translation + Vec3::new(0.0, 0.95, 0.0));
-
+    for (entity, _transform) in query.iter() {
+        // Don't modify Transform - it's replicated from server
+        // Just add visual components
         commands
             .entity(entity)
             .insert((
                 Mesh3d(trunk_mesh.clone()),
                 MeshMaterial3d(bark_material.clone()),
-                trunk_transform,
                 Visibility::default(),
+                TreeVisualsSpawned,
             ))
             .with_children(|parent| {
                 // Lower canopy (snow-covered)
@@ -261,7 +273,7 @@ fn spawn_tree_visuals(
 
 fn spawn_player_visuals(
     mut commands: Commands,
-    query: Query<Entity, Added<Player>>,
+    query: Query<Entity, (Added<Player>, Without<PlayerVisualsSpawned>)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -270,20 +282,22 @@ fn spawn_player_visuals(
             Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
             MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
             Visibility::default(),
+            PlayerVisualsSpawned,
         ));
     }
 }
 
 fn spawn_zombie_visuals(
     mut commands: Commands,
-    query: Query<Entity, Added<Zombie>>,
+    query: Query<Entity, (Added<Zombie>, Without<ZombieVisualsSpawned>)>,
     asset_server: Res<AssetServer>,
 ) {
     for entity in query.iter() {
+        // Don't insert Transform - it's already replicated from server
         commands.entity(entity).insert((
             SceneRoot(asset_server.load("zombie.glb#Scene0")),
-            Transform::from_scale(Vec3::splat(1.0)),
             Visibility::default(),
+            ZombieVisualsSpawned,
         ));
     }
 }
@@ -379,6 +393,19 @@ fn animate_player_damage(
     }
 }
 
+// Marker components to track visual spawning
+#[derive(Component)]
+struct PlayerVisualsSpawned;
+
+#[derive(Component)]
+struct ZombieVisualsSpawned;
+
+#[derive(Component)]
+struct MapVisualsSpawned;
+
+#[derive(Component)]
+struct TreeVisualsSpawned;
+
 // Component to mark the health UI elements
 #[derive(Component)]
 struct HealthBarUI;
@@ -407,6 +434,14 @@ fn display_health_bar(
             our_health = Some(health);
             break;
         }
+    }
+
+    // Clean up health UI if player doesn't exist
+    if our_health.is_none() && !health_ui_query.is_empty() {
+        for entity in health_ui_query.iter() {
+            commands.entity(entity).despawn();
+        }
+        return;
     }
 
     // If we have health data and no UI exists, create it

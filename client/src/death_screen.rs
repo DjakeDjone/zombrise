@@ -1,7 +1,5 @@
 
 use bevy::prelude::*;
-use bevy::text::prelude::*;
-use bevy::ui::prelude::*;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
 use zombrise_shared::players::player::{Health, Player, PlayerOwner};
 
@@ -47,8 +45,14 @@ pub fn show_death_screen(
     player_died: Res<PlayerDied>,
     death_screen_query: Query<Entity, With<DeathScreenMarker>>,
     mut window_query: Query<&mut Window, With<PrimaryWindow>>,
+    health_ui_query: Query<Entity, With<crate::HealthBarUI>>,
 ) {
     if player_died.0 && death_screen_query.is_empty() {
+        // Clean up health bar UI when showing death screen
+        for entity in health_ui_query.iter() {
+            commands.entity(entity).despawn();
+        }
+
         // Unlock cursor when dead
         // Unlock cursor when dead
         if let Ok(mut window) = window_query.single_mut() {

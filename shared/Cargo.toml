@@ -28,7 +28,7 @@ serde = { version = "1.0", features = ["derive"] }
 rand = "0.9.2"
 
 # Optional: only needed for client
-bevy_input = { version = "0.16", optional = true }
+bevy_input = { version = "0.17.3", optional = true }
 
 [features]
 default = []
