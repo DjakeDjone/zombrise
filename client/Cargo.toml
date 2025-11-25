@@ -13,6 +13,7 @@ bevy = { version = "0.16", default-features = false, features = [
     "animation",
     "bevy_ui",
     "bevy_winit",
+    "bevy_window",
     "bevy_core_pipeline",
     "bevy_pbr",
     "bevy_render",
@@ -26,6 +27,7 @@ bevy = { version = "0.16", default-features = false, features = [
     "wayland",
     "bevy_state",
 ] }
+bevy_core_pipeline = "0.16"
 bevy_replicon = "0.33"
 bevy_replicon_renet2 = "0.9"
 renet2_netcode = "0.9"

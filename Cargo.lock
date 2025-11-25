@@ -6136,6 +6136,7 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "bevy",
+ "bevy_core_pipeline",
  "bevy_replicon",
  "bevy_replicon_renet2",
  "bevy_simple_text_input",
