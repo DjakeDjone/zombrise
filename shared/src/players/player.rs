@@ -11,7 +11,7 @@ use bevy::{
 };
 
 #[cfg(feature = "client")]
-use bevy::input::{ButtonInput, keyboard::KeyCode};
+use bevy::input::{keyboard::KeyCode, ButtonInput};
 use bevy_replicon_renet2::renet2::ClientId;
 use serde::{Deserialize, Serialize};
 
@@ -59,7 +59,6 @@ pub struct DamagePlayer {
     pub amount: f32,
 }
 
-
 #[cfg(feature = "client")]
 pub fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
@@ -102,15 +101,15 @@ pub struct CameraRotation {
     pub pitch: f32,
 }
 
-pub fn camera_follow(
-    player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
-    mut camera_query: Query<&mut Transform, With<MainCamera>>,
-) {
-    if let Ok(player_transform) = player_query.single() {
-        if let Ok(mut camera_transform) = camera_query.single_mut() {
-            let offset = Vec3::new(0.0, 5.0, 10.0);
-            camera_transform.translation = player_transform.translation + offset;
-            camera_transform.look_at(player_transform.translation, Vec3::Y);
-        }
-    }
-}
+// pub fn camera_follow(
+//     player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
+//     mut camera_query: Query<&mut Transform, With<MainCamera>>,
+// ) {
+//     if let Ok(player_transform) = player_query.single() {
+//         if let Ok(mut camera_transform) = camera_query.single_mut() {
+//             let offset = Vec3::new(0.0, 5.0, 10.0);
+//             camera_transform.translation = player_transform.translation + offset;
+//             camera_transform.look_at(player_transform.translation, Vec3::Y);
+//         }
+//     }
+// }

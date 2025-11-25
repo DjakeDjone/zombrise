@@ -1,19 +1,17 @@
-use bevy::core_pipeline::core_3d::Camera3d;
 use bevy::input::mouse::MouseMotion;
 use bevy::pbr::prelude::*;
 use bevy::prelude::*;
 use bevy::scene::SceneRoot;
-use bevy::window::{CursorGrabMode, PrimaryWindow};
+use bevy::window::{CursorGrabMode, PresentMode, PrimaryWindow, WindowPlugin};
+use bevy_core_pipeline::prelude::Camera3d;
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet2::{
-    renet2::{
-        ConnectionConfig, RenetClient,
-    },
     netcode::{ClientAuthentication, NetcodeClientTransport},
+    renet2::{ConnectionConfig, RenetClient},
     RenetChannelsExt, RepliconRenetPlugins,
 };
-use renet2_netcode::NativeSocket;
 use bevy_simple_text_input::TextInputPlugin;
+use renet2_netcode::NativeSocket;
 use std::{
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
     time::SystemTime,
@@ -41,7 +39,13 @@ pub struct MyClientId(pub u64);
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                present_mode: PresentMode::Fifo,
+                ..default()
+            }),
+            ..default()
+        }))
         .add_plugins(RepliconPlugins)
         .add_plugins(RepliconRenetPlugins)
         .add_plugins(SharedPlugin)
@@ -64,10 +68,7 @@ fn main() {
             OnEnter(AppState::Playing),
             (setup, setup_client, lock_cursor),
         )
-        .add_systems(
-            OnExit(AppState::Playing),
-            cleanup_playing_state,
-        )
+        .add_systems(OnExit(AppState::Playing), cleanup_playing_state)
         .add_systems(
             Update,
             (
@@ -99,11 +100,14 @@ fn setup_client(
     let server_channels_config = network_channels.server_configs();
     let client_channels_config = network_channels.client_configs();
 
-    let client = RenetClient::new(ConnectionConfig {
-        server_channels_config,
-        client_channels_config,
-        available_bytes_per_tick: 16 * 1024,
-    }, false);
+    let client = RenetClient::new(
+        ConnectionConfig {
+            server_channels_config,
+            client_channels_config,
+            available_bytes_per_tick: 16 * 1024,
+        },
+        false,
+    );
 
     let current_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -133,7 +137,8 @@ fn setup_client(
 
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let native_socket = NativeSocket::new(socket).unwrap();
-    let transport = NetcodeClientTransport::new(current_time, authentication, native_socket).unwrap();
+    let transport =
+        NetcodeClientTransport::new(current_time, authentication, native_socket).unwrap();
 
     commands.insert_resource(client);
     commands.insert_resource(transport);
@@ -141,13 +146,30 @@ fn setup_client(
 }
 
 fn setup_camera(mut commands: Commands) {
-    // Camera - spawn at startup for UI rendering
+    // 1. 3D Camera (Renders the game world)
+    // Order 0: Renders first
     commands.spawn((
-        (
-            Camera3d::default(),
-            Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ),
+        Camera3d::default(),
+        Camera {
+            order: 0,
+            ..default()
+        },
+        Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
         MainCamera,
+    ));
+
+    // 2. UI Camera (Renders the Interface)
+    // Order 1: Renders AFTER the 3D camera
+    // ClearColorConfig::None: Transparent background (don't erase the 3D world)
+    // IsDefaultUiCamera: Tells Bevy "Put all UI on this camera"
+    commands.spawn((
+        Camera2d::default(),
+        Camera {
+            order: 1,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+        IsDefaultUiCamera,
     ));
 }
 
@@ -191,7 +213,9 @@ fn spawn_map_visuals(
 ) {
     for entity in query.iter() {
         // Don't insert Transform - it's already replicated from server
-        commands.entity(entity).insert((Visibility::default(), MapVisualsSpawned));
+        commands
+            .entity(entity)
+            .insert((Visibility::default(), MapVisualsSpawned));
         // Spawn landscape without trees (trees come from server)
         spawn_snow_landscape(
             &mut commands,
@@ -366,7 +390,11 @@ fn handle_escape_key(
 
 fn animate_player_damage(
     mut player_query: Query<
-        (&DamageFlash, &MeshMaterial3d<StandardMaterial>, &PlayerOwner),
+        (
+            &DamageFlash,
+            &MeshMaterial3d<StandardMaterial>,
+            &PlayerOwner,
+        ),
         (With<Player>, Changed<DamageFlash>),
     >,
     mut materials: ResMut<Assets<StandardMaterial>>,
