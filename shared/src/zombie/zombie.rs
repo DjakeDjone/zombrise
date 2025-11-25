@@ -12,12 +12,11 @@ pub struct ZombieAnimations(pub Vec<AnimationNodeIndex>);
 #[cfg(feature = "client")]
 pub fn spawn_zombie(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
-        .spawn(SceneBundle {
-            scene: asset_server.load("zombie.glb#Scene0"),
-            transform: Transform::from_xyz(1.0, 0.0, 1.0).with_scale(Vec3::splat(1.0)),
-            ..default()
-        })
-        .insert(Zombie);
+        .spawn((
+            SceneRoot(asset_server.load("zombie.glb#Scene0")),
+            Transform::from_xyz(1.0, 0.0, 1.0).with_scale(Vec3::splat(1.0)),
+            Zombie,
+        ));
 }
 
 #[cfg(feature = "client")]
@@ -36,7 +35,7 @@ pub fn setup_zombie_animation(
             graph.add_clip(asset_server.load("zombie.glb#Animation12"), 1.0, graph.root),
         ];
 
-        commands.entity(entity).insert(graphs.add(graph));
+        commands.entity(entity).insert(AnimationGraphHandle(graphs.add(graph)));
         commands
             .entity(entity)
             .insert(ZombieAnimations(node_indices.clone()));

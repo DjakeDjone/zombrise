@@ -12,7 +12,7 @@ use bevy::{
 
 #[cfg(feature = "client")]
 use bevy::input::{ButtonInput, keyboard::KeyCode};
-use bevy_replicon::prelude::ClientId;
+use bevy_replicon_renet2::renet2::ClientId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Component, Serialize, Deserialize, Reflect)]
@@ -85,14 +85,14 @@ pub fn handle_input(
     if direction.length() > 0.0 {
         direction = direction.normalize();
         let camera_yaw = camera_rotation.map(|r| r.yaw).unwrap_or(0.0);
-        move_events.send(MovePlayer {
+        move_events.write(MovePlayer {
             direction,
             camera_yaw,
         });
     }
 
     if keyboard_input.just_pressed(KeyCode::Space) {
-        attack_events.send(PlayerAttack);
+        attack_events.write(PlayerAttack);
     }
 }
 
@@ -106,8 +106,8 @@ pub fn camera_follow(
     player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
     mut camera_query: Query<&mut Transform, With<MainCamera>>,
 ) {
-    if let Ok(player_transform) = player_query.get_single() {
-        if let Ok(mut camera_transform) = camera_query.get_single_mut() {
+    if let Ok(player_transform) = player_query.single() {
+        if let Ok(mut camera_transform) = camera_query.single_mut() {
             let offset = Vec3::new(0.0, 5.0, 10.0);
             camera_transform.translation = player_transform.translation + offset;
             camera_transform.look_at(player_transform.translation, Vec3::Y);

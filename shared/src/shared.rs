@@ -3,7 +3,7 @@ pub use crate::players::player::{
 };
 pub use crate::zombie::zombie::Zombie;
 use bevy::prelude::*;
-use bevy_replicon::prelude::*;
+use bevy_replicon::prelude::{*, Channel};
 use serde::{Deserialize, Serialize};
 
 #[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default)]
@@ -26,7 +26,7 @@ impl Plugin for SharedPlugin {
         app.replicate::<Transform>();
         app.replicate::<MapMarker>();
         app.replicate::<TreeMarker>();
-        app.add_client_event::<MovePlayer>(ChannelKind::Unordered);
-        app.add_client_event::<PlayerAttack>(ChannelKind::Unordered);
+        app.add_client_event::<MovePlayer>(Channel::Unreliable);
+        app.add_client_event::<PlayerAttack>(Channel::Unreliable);
     }
 }

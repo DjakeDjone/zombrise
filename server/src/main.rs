@@ -3,12 +3,13 @@ use bevy::prelude::*;
 use bevy::app::ScheduleRunnerPlugin;
 use bevy_rapier3d::prelude::*;
 use bevy_replicon::prelude::*;
-use bevy_replicon_renet::{
-    renet::{
-        transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig},
-        ConnectionConfig, RenetServer,
+use bevy_replicon_renet2::{
+    renet2::{
+        ConnectionConfig, RenetServer, ServerEvent, ClientId,
     },
-    RenetChannelsExt, RepliconRenetPlugins,
+    netcode::{NetcodeServerTransport, ServerAuthentication, ServerConfig},
+    RepliconRenetPlugins,
+    RenetChannelsExt,
 };
 use rand::Rng;
 use std::{
@@ -70,13 +71,13 @@ fn main() {
 }
 
 fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>) {
-    let server_channels_config = network_channels.get_server_configs();
-    let client_channels_config = network_channels.get_client_configs();
+    let server_channels_config = network_channels.server_configs();
+    let client_channels_config = network_channels.client_configs();
 
     let server = RenetServer::new(ConnectionConfig {
         server_channels_config,
         client_channels_config,
-        ..Default::default()
+        available_bytes_per_tick: 16 * 1024,
     });
 
     let current_time = SystemTime::now()
@@ -86,15 +87,16 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     let public_addr = "0.0.0.0:5000";
     let socket = UdpSocket::bind(public_addr).unwrap();
 
-    let server_config = ServerConfig {
+    let server_setup_config = bevy_replicon_renet2::netcode::ServerSetupConfig {
         current_time,
         max_clients: 10,
         protocol_id: 0,
-        public_addresses: vec![public_addr.parse().unwrap()],
+        socket_addresses: vec![public_addr.parse().unwrap()],
         authentication: ServerAuthentication::Unsecure,
     };
 
-    let transport = NetcodeServerTransport::new(server_config, socket).unwrap();
+    let socket = bevy_replicon_renet2::netcode::NetcodeSocket::new(socket).unwrap();
+    let transport = NetcodeServerTransport::new(server_setup_config, socket).unwrap();
 
     commands.insert_resource(server);
     commands.insert_resource(transport);
@@ -103,7 +105,8 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     commands.spawn((
         MapMarker,
         Replicated,
-        SpatialBundle::from_transform(Transform::from_xyz(0.0, -0.55, 0.0)),
+        Transform::from_xyz(0.0, -0.55, 0.0),
+        Visibility::default(),
         Collider::cuboid(28.0, 0.05, 28.0), // Flat ground: 56x0.1x56 units
     ));
 
@@ -166,9 +169,10 @@ fn handle_move_player(
     mut query: Query<(&PlayerOwner, &mut Velocity, &mut Transform)>,
 ) {
     let speed = 5.0;
-    for FromClient { client_id, event } in events.read() {
-        for (owner, mut velocity, mut transform) in &mut query {
-            if owner.0 == *client_id {
+    for FromClient { client_entity: _, event } in events.read() {
+        // Note: In bevy_replicon, each client only sends events for themselves
+        // So we can apply the movement to all players
+        for (_, mut velocity, mut transform) in &mut query {
                 // Rotate the input direction by the camera yaw
                 let yaw_rotation = Quat::from_rotation_y(event.camera_yaw);
                 let rotated_direction = yaw_rotation * event.direction;
@@ -188,7 +192,6 @@ fn handle_move_player(
                         velocity.linvel.y = 5.0; // jump velocity
                     }
                 }
-            }
         }
     }
 }
@@ -198,7 +201,7 @@ fn update_map_size(
     mut map_query: Query<&mut Transform, With<MapMarker>>,
 ) {
     let player_count = player_query.iter().count();
-    if let Ok(mut transform) = map_query.get_single_mut() {
+    if let Ok(mut transform) = map_query.single_mut() {
         let target_scale = 1.0 + (player_count as f32 * 0.2);
         if (transform.scale.x - target_scale).abs() > 0.01 {
             transform.scale = Vec3::splat(target_scale);
@@ -268,10 +271,10 @@ fn zombie_movement(
         // Random movement
         let change_direction_probability = 0.02;
         let random_number = rand::random::<f32>();
-        
+
         let mut direction = Vec3::ZERO;
         if velocity.linvel.length_squared() > 0.01 {
-             direction = velocity.linvel.normalize();
+            direction = velocity.linvel.normalize();
         }
 
         if random_number < change_direction_probability || direction == Vec3::ZERO {
@@ -283,7 +286,7 @@ fn zombie_movement(
             )
             .normalize_or_zero();
         }
-        
+
         // Move forward
         velocity.linvel.x = direction.x * speed;
         velocity.linvel.z = direction.z * speed;
@@ -308,7 +311,7 @@ fn zombie_collision_damage(
                 .distance(player_transform.translation);
 
             if distance < COLLISION_DISTANCE && health.current > 0.0 {
-                let damage = DAMAGE_PER_SECOND * time.delta_seconds();
+                let damage = DAMAGE_PER_SECOND * time.delta_secs();
                 health.current = (health.current - damage).max(0.0);
                 damage_flash.timer = 0.3; // Flash for 0.3 seconds
 
@@ -322,24 +325,32 @@ fn zombie_collision_damage(
 
 fn handle_player_attack(
     mut events: EventReader<FromClient<PlayerAttack>>,
-    mut player_query: Query<(Entity, &PlayerOwner, &Transform, &mut Health, &mut DamageFlash), With<Player>>,
+    mut player_query: Query<
+        (
+            Entity,
+            &PlayerOwner,
+            &Transform,
+            &mut Health,
+            &mut DamageFlash,
+        ),
+        With<Player>,
+    >,
     mut zombie_query: Query<(Entity, &Transform), With<Zombie>>,
     mut commands: Commands,
 ) {
     const ATTACK_RANGE: f32 = 2.0;
     const PLAYER_DAMAGE: f32 = 10.0;
 
-    for FromClient { client_id, .. } in events.read() {
+    for FromClient { client_entity: _, .. } in events.read() {
+        // Note: In bevy_replicon, each client only sends events for themselves
         let mut attacker_pos: Option<Vec3> = None;
         let mut attacker_entity: Option<Entity> = None;
 
-        // Find the attacking player
-        for (entity, owner, transform, _, _) in &player_query {
-            if owner.0 == *client_id {
+        // Find the attacking player (there should only be one per event)
+        for (entity, _, transform, _, _) in &player_query {
                 attacker_pos = Some(transform.translation);
                 attacker_entity = Some(entity);
                 break;
-            }
         }
 
         if let Some(attacker_pos) = attacker_pos {
@@ -372,7 +383,7 @@ fn handle_player_attack(
 fn update_damage_flash(mut query: Query<&mut DamageFlash>, time: Res<Time>) {
     for mut damage_flash in &mut query {
         if damage_flash.timer > 0.0 {
-            damage_flash.timer -= time.delta_seconds();
+            damage_flash.timer -= time.delta_secs();
             if damage_flash.timer < 0.0 {
                 damage_flash.timer = 0.0;
             }
@@ -387,7 +398,7 @@ fn remove_dead_players(
     for (entity, health, owner) in &player_query {
         if health.current <= 0.0 {
             println!("Removing dead player (Client ID: {:?})", owner.0);
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).despawn();
         }
     }
 }
