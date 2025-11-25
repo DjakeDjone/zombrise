@@ -1,26 +1,29 @@
+use bevy::core_pipeline::core_3d::Camera3d;
 use bevy::input::mouse::MouseMotion;
-use bevy::window::{CursorGrabMode, PrimaryWindow};
+use bevy::pbr::prelude::*;
 use bevy::prelude::*;
+use bevy::scene::SceneRoot;
+use bevy::text::prelude::*;
+use bevy::ui::prelude::*;
+use bevy::window::{CursorGrabMode, PrimaryWindow};
 use bevy_replicon::prelude::*;
-use bevy_replicon_renet::{
-    renet::{
-        transport::{ClientAuthentication, NetcodeClientTransport},
+use bevy_replicon_renet2::{
+    renet2::{
         ConnectionConfig, RenetClient,
     },
+    netcode::{ClientAuthentication, NetcodeClientTransport},
     RenetChannelsExt, RepliconRenetPlugins,
 };
 use bevy_simple_text_input::TextInputPlugin;
-use zombrise_shared::players::player::{
-    handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
-};
-use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
-use zombrise_shared::zombie::zombie::{
-    setup_zombie_animation, Zombie, ZombieAnimations,
-};
 use std::{
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
     time::SystemTime,
 };
+use zombrise_shared::players::player::{
+    handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
+};
+use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
+use zombrise_shared::zombie::zombie::{setup_zombie_animation, Zombie, ZombieAnimations};
 
 mod map;
 use map::{spawn_snow_landscape, SnowLandscapeConfig};
@@ -90,14 +93,14 @@ fn setup_client(
     network_channels: Res<RepliconChannels>,
     server_config: Res<ServerConfig>,
 ) {
-    let server_channels_config = network_channels.get_server_configs();
-    let client_channels_config = network_channels.get_client_configs();
+    let server_channels_config = network_channels.server_configs();
+    let client_channels_config = network_channels.client_configs();
 
     let client = RenetClient::new(ConnectionConfig {
         server_channels_config,
         client_channels_config,
-        ..Default::default()
-    });
+        available_bytes_per_tick: 16 * 1024,
+    }, false);
 
     let current_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -122,6 +125,7 @@ fn setup_client(
         client_id,
         protocol_id: 0,
         server_addr,
+        socket_id: 0,
         user_data: None,
     };
 
@@ -135,34 +139,34 @@ fn setup_client(
 fn setup_camera(mut commands: Commands) {
     // Camera - spawn at startup for UI rendering
     commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
-            ..default()
-        },
+        (
+            Camera3d::default(),
+            Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+        ),
         MainCamera,
     ));
 }
 
 fn setup(mut commands: Commands) {
     // Light
-    commands.spawn(PointLightBundle {
-        point_light: PointLight {
+    commands.spawn((
+        PointLight {
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
-        ..default()
-    });
+        Transform::from_xyz(4.0, 8.0, 4.0),
+        Visibility::default(),
+    ));
 
     // Additional directional light for better illumination
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
+    commands.spawn((
+        DirectionalLight {
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_rotation(Quat::from_euler(EulerRot::YXZ, -0.5, -0.5, 0.0)),
-        ..default()
-    });
+        Transform::from_rotation(Quat::from_euler(EulerRot::YXZ, -0.5, -0.5, 0.0)),
+        Visibility::default(),
+    ));
 }
 
 fn spawn_map_visuals(
@@ -172,7 +176,7 @@ fn spawn_map_visuals(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for entity in query.iter() {
-        commands.entity(entity).insert(SpatialBundle::default());
+        commands.entity(entity).insert((Transform::default(), Visibility::default()));
         // Spawn landscape without trees (trees come from server)
         spawn_snow_landscape(
             &mut commands,
@@ -215,24 +219,24 @@ fn spawn_tree_visuals(
 
         commands
             .entity(entity)
-            .insert(PbrBundle {
-                mesh: trunk_mesh.clone(),
-                material: bark_material.clone(),
-                transform: trunk_transform,
-                ..default()
-            })
+            .insert((
+                Mesh3d(trunk_mesh.clone()),
+                MeshMaterial3d(bark_material.clone()),
+                trunk_transform,
+                Visibility::default(),
+            ))
             .with_children(|parent| {
                 // Lower canopy (snow-covered)
                 let mut lower_canopy = Transform::from_translation(Vec3::new(0.0, 1.05, 0.0));
                 lower_canopy.scale = Vec3::new(1.6, 1.15, 1.6);
 
                 parent.spawn((
-                    PbrBundle {
-                        mesh: canopy_mesh.clone(),
-                        material: foliage_material.clone(),
-                        transform: lower_canopy,
-                        ..default()
-                    },
+                    (
+                        Mesh3d(canopy_mesh.clone()),
+                        MeshMaterial3d(foliage_material.clone()),
+                        lower_canopy,
+                        Visibility::default(),
+                    ),
                     Name::new("Evergreen Foliage (Lower)"),
                 ));
 
@@ -241,12 +245,12 @@ fn spawn_tree_visuals(
                 upper_canopy.scale = Vec3::new(1.0, 1.1, 1.0);
 
                 parent.spawn((
-                    PbrBundle {
-                        mesh: canopy_mesh.clone(),
-                        material: foliage_material.clone(),
-                        transform: upper_canopy,
-                        ..default()
-                    },
+                    (
+                        Mesh3d(canopy_mesh.clone()),
+                        MeshMaterial3d(foliage_material.clone()),
+                        upper_canopy,
+                        Visibility::default(),
+                    ),
                     Name::new("Evergreen Foliage (Upper)"),
                 ));
             });
@@ -260,11 +264,11 @@ fn spawn_player_visuals(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for entity in query.iter() {
-        commands.entity(entity).insert(PbrBundle {
-            mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-            material: materials.add(Color::srgb(0.8, 0.7, 0.6)),
-            ..default()
-        });
+        commands.entity(entity).insert((
+            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+            MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
+            Visibility::default(),
+        ));
     }
 }
 
@@ -274,11 +278,11 @@ fn spawn_zombie_visuals(
     asset_server: Res<AssetServer>,
 ) {
     for entity in query.iter() {
-        commands.entity(entity).insert(SceneBundle {
-            scene: asset_server.load("zombie.glb#Scene0"),
-            transform: Transform::from_scale(Vec3::splat(1.0)),
-            ..default()
-        });
+        commands.entity(entity).insert((
+            SceneRoot(asset_server.load("zombie.glb#Scene0")),
+            Transform::from_scale(Vec3::splat(1.0)),
+            Visibility::default(),
+        ));
     }
 }
 
@@ -289,8 +293,8 @@ fn camera_follow(
     camera_rotation: Res<CameraRotation>,
 ) {
     for (player_transform, owner) in player_query.iter() {
-        if owner.0.get() == my_client_id.0 {
-            if let Ok(mut camera_transform) = camera_query.get_single_mut() {
+        if owner.0 == my_client_id.0 {
+            if let Ok(mut camera_transform) = camera_query.single_mut() {
                 // Calculate camera offset using yaw and pitch
                 let distance = 10.0;
                 let yaw = camera_rotation.yaw;
@@ -326,9 +330,9 @@ fn handle_camera_rotation(
 }
 
 fn lock_cursor(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
-    if let Ok(mut window) = window_query.get_single_mut() {
-        window.cursor.grab_mode = CursorGrabMode::Locked;
-        window.cursor.visible = false;
+    if let Ok(mut window) = window_query.single_mut() {
+        window.cursor_options.grab_mode = CursorGrabMode::Locked;
+        window.cursor_options.visible = false;
     }
 }
 
@@ -337,16 +341,16 @@ fn handle_escape_key(
     mut window_query: Query<&mut Window, With<PrimaryWindow>>,
 ) {
     if keys.just_pressed(KeyCode::Escape) {
-        if let Ok(mut window) = window_query.get_single_mut() {
-            window.cursor.grab_mode = CursorGrabMode::None;
-            window.cursor.visible = true;
+        if let Ok(mut window) = window_query.single_mut() {
+            window.cursor_options.grab_mode = CursorGrabMode::None;
+            window.cursor_options.visible = true;
         }
     }
 }
 
 fn animate_player_damage(
     mut player_query: Query<
-        (&DamageFlash, &Handle<StandardMaterial>, &PlayerOwner),
+        (&DamageFlash, &MeshMaterial3d<StandardMaterial>, &PlayerOwner),
         (With<Player>, Changed<DamageFlash>),
     >,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -354,7 +358,7 @@ fn animate_player_damage(
 ) {
     for (damage_flash, material_handle, owner) in player_query.iter_mut() {
         // Only animate our own player
-        if owner.0.get() == my_client_id.0 {
+        if owner.0 == my_client_id.0 {
             if let Some(material) = materials.get_mut(material_handle) {
                 if damage_flash.timer > 0.0 {
                     // Flash red when damaged
@@ -389,15 +393,15 @@ fn display_health_bar(
     my_client_id: Res<MyClientId>,
     health_ui_query: Query<Entity, With<HealthBarUI>>,
     mut health_fill_query: Query<
-        (&mut Style, &mut BackgroundColor),
+        (&mut Node, &mut BackgroundColor),
         (With<HealthBarFill>, Without<HealthText>),
     >,
-    mut health_text_query: Query<&mut Text, With<HealthText>>,
+    mut health_text_query: Query<(&mut Text, &mut TextColor), With<HealthText>>,
 ) {
     // Find our player's health
     let mut our_health: Option<&Health> = None;
     for (health, owner) in player_query.iter() {
-        if owner.0.get() == my_client_id.0 {
+        if owner.0 == my_client_id.0 {
             our_health = Some(health);
             break;
         }
@@ -408,16 +412,13 @@ fn display_health_bar(
         // Create health bar UI
         commands
             .spawn((
-                NodeBundle {
-                    style: Style {
-                        position_type: PositionType::Absolute,
-                        left: Val::Px(20.0),
-                        top: Val::Px(20.0),
-                        width: Val::Px(300.0),
-                        height: Val::Px(50.0),
-                        flex_direction: FlexDirection::Column,
-                        ..default()
-                    },
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(20.0),
+                    top: Val::Px(20.0),
+                    width: Val::Px(300.0),
+                    height: Val::Px(50.0),
+                    flex_direction: FlexDirection::Column,
                     ..default()
                 },
                 HealthBarUI,
@@ -425,46 +426,40 @@ fn display_health_bar(
             .with_children(|parent| {
                 // Health text
                 parent.spawn((
-                    TextBundle::from_section(
-                        "Health: 100/100 (100%)",
-                        TextStyle {
-                            font_size: 20.0,
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                    )
-                    .with_style(Style {
+                    Text::new("Health: 100/100 (100%)"),
+                    TextFont {
+                        font_size: 20.0,
+                        ..default()
+                    },
+                    TextColor(Color::WHITE),
+                    Node {
                         margin: UiRect::bottom(Val::Px(5.0)),
                         ..default()
-                    }),
+                    },
                     HealthText,
                 ));
 
                 // Health bar background
                 parent
-                    .spawn(NodeBundle {
-                        style: Style {
+                    .spawn((
+                        Node {
                             width: Val::Px(300.0),
                             height: Val::Px(20.0),
                             border: UiRect::all(Val::Px(2.0)),
                             ..default()
                         },
-                        background_color: Color::srgb(0.2, 0.2, 0.2).into(),
-                        border_color: Color::srgb(0.8, 0.8, 0.8).into(),
-                        ..default()
-                    })
+                        BackgroundColor(Color::srgb(0.2, 0.2, 0.2).into()),
+                        BorderColor(Color::srgb(0.8, 0.8, 0.8).into()),
+                    ))
                     .with_children(|parent| {
                         // Health bar fill
                         parent.spawn((
-                            NodeBundle {
-                                style: Style {
-                                    width: Val::Percent(100.0),
-                                    height: Val::Percent(100.0),
-                                    ..default()
-                                },
-                                background_color: Color::srgb(0.2, 0.8, 0.2).into(),
+                            Node {
+                                width: Val::Percent(100.0),
+                                height: Val::Percent(100.0),
                                 ..default()
                             },
+                            BackgroundColor(Color::srgb(0.2, 0.8, 0.2).into()),
                             HealthBarFill,
                         ));
                     });
@@ -485,20 +480,20 @@ fn display_health_bar(
         };
 
         // Update health bar fill width and color
-        if let Ok((mut style, mut bg_color)) = health_fill_query.get_single_mut() {
-            style.width = Val::Percent(health_percent);
+        if let Ok((mut node, mut bg_color)) = health_fill_query.single_mut() {
+            node.width = Val::Percent(health_percent);
             *bg_color = bar_color.into();
         }
 
         // Update health text
-        if let Ok(mut text) = health_text_query.get_single_mut() {
-            text.sections[0].value = format!(
+        if let Ok((mut text, mut text_color)) = health_text_query.single_mut() {
+            text.0 = format!(
                 "Health: {:.0}/{:.0} ({:.0}%)",
                 health.current, health.max, health_percent
             );
 
             // Change text color based on health percentage
-            text.sections[0].style.color = if health_percent > 60.0 {
+            text_color.0 = if health_percent > 60.0 {
                 Color::srgb(0.2, 1.0, 0.2) // Green
             } else if health_percent > 30.0 {
                 Color::srgb(1.0, 0.8, 0.0) // Yellow
