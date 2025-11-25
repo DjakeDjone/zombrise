@@ -5,15 +5,16 @@ use bevy_rapier3d::prelude::*;
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet2::{
     renet2::{
-        ConnectionConfig, RenetServer, ServerEvent, ClientId,
+        ConnectionConfig, RenetServer, ServerEvent,
     },
-    netcode::{NetcodeServerTransport, ServerAuthentication, ServerConfig},
+    netcode::{NetcodeServerTransport, ServerAuthentication},
     RepliconRenetPlugins,
     RenetChannelsExt,
 };
+use renet2_netcode::NativeSocket;
 use rand::Rng;
 use std::{
-    net::UdpSocket,
+    net::{SocketAddr, UdpSocket},
     time::{Duration, SystemTime},
 };
 use zombrise_shared::players::player::{DamageFlash, Health, Player, PlayerAttack, PlayerOwner};
@@ -84,19 +85,20 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
 
-    let public_addr = "0.0.0.0:5000";
+    let public_addr: SocketAddr = "0.0.0.0:5000".parse().unwrap();
     let socket = UdpSocket::bind(public_addr).unwrap();
+    let native_socket = NativeSocket::new(socket).unwrap();
 
+    let socket_addresses = vec![vec![public_addr]];
     let server_setup_config = bevy_replicon_renet2::netcode::ServerSetupConfig {
         current_time,
         max_clients: 10,
         protocol_id: 0,
-        socket_addresses: vec![public_addr.parse().unwrap()],
+        socket_addresses,
         authentication: ServerAuthentication::Unsecure,
     };
 
-    let socket = bevy_replicon_renet2::netcode::NetcodeSocket::new(socket).unwrap();
-    let transport = NetcodeServerTransport::new(server_setup_config, socket).unwrap();
+    let transport = NetcodeServerTransport::new(server_setup_config, native_socket).unwrap();
 
     commands.insert_resource(server);
     commands.insert_resource(transport);

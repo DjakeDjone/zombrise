@@ -31,6 +31,7 @@ bevy = { version = "0.16", default-features = false, features = [
 ] }
 bevy_replicon = "0.33"
 bevy_replicon_renet2 = "0.9"
+renet2_netcode = "0.9"
 bevy_rapier3d = { version = "0.31", default-features = false, features = [
     "dim3",
     "simd-stable",

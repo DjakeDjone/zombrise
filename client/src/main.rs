@@ -14,6 +14,7 @@ use bevy_replicon_renet2::{
     netcode::{ClientAuthentication, NetcodeClientTransport},
     RenetChannelsExt, RepliconRenetPlugins,
 };
+use renet2_netcode::NativeSocket;
 use bevy_simple_text_input::TextInputPlugin;
 use std::{
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
@@ -120,7 +121,6 @@ fn setup_client(
 
     println!("Connecting to server at: {}", server_addr);
 
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let authentication = ClientAuthentication::Unsecure {
         client_id,
         protocol_id: 0,
@@ -129,7 +129,9 @@ fn setup_client(
         user_data: None,
     };
 
-    let transport = NetcodeClientTransport::new(current_time, authentication, socket).unwrap();
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let native_socket = NativeSocket::new(socket).unwrap();
+    let transport = NetcodeClientTransport::new(current_time, authentication, native_socket).unwrap();
 
     commands.insert_resource(client);
     commands.insert_resource(transport);
