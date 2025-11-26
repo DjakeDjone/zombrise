@@ -101,7 +101,8 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     commands.spawn((
         MapMarker,
         Replicated,
-        Transform::from_xyz(0.0, -0.55, 0.0),
+        Transform::from_xyz(0.0, -0.05, 0.0),
+        RigidBody::Static,
         Collider::cuboid(56.0, 0.1, 56.0), // Flat ground: 56x0.1x56 units
     ));
 
@@ -121,6 +122,7 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
             Replicated,
             Transform::from_translation(position),
             GlobalTransform::default(),
+            RigidBody::Static,
             Collider::cylinder(0.3, 2.0), // Collision cylinder for tree trunk and canopy
         ));
     }
@@ -143,7 +145,7 @@ fn server_event_system(
                     Health::default(),
                     DamageFlash::default(),
                     Replicated,
-                    Transform::from_xyz(0.0, 1.0, 0.0),
+                    Transform::from_xyz(0.0, 0.5, 0.0),
                     GlobalTransform::default(),
                     RigidBody::Dynamic,
                     Collider::capsule(0.5, 1.0),
@@ -215,7 +217,7 @@ fn spawn_zombies(mut commands: Commands, time: Res<Time>, mut timer: ResMut<Zomb
         commands.spawn((
             Zombie,
             Replicated,
-            Transform::from_xyz(x, 1.0, z),
+            Transform::from_xyz(x, 0.5, z),
             GlobalTransform::default(),
             RigidBody::Dynamic,
             Collider::capsule(0.5, 1.0),
@@ -230,13 +232,13 @@ fn spawn_zombies(mut commands: Commands, time: Res<Time>, mut timer: ResMut<Zomb
 }
 
 fn zombie_movement(
-    mut zombie_query: Query<(&mut LinearVelocity, &mut AngularVelocity, &Transform), With<Zombie>>,
+    mut zombie_query: Query<(&mut LinearVelocity, &Transform), With<Zombie>>,
     player_query: Query<&Transform, With<Player>>,
 ) {
     let speed = 2.0;
     let chase_range = 10.0;
 
-    for (mut lin_vel, mut ang_vel, zombie_transform) in &mut zombie_query {
+    for (mut lin_vel, zombie_transform) in &mut zombie_query {
         let mut nearest_player_pos: Option<Vec3> = None;
         let mut min_dist = f32::MAX;
 
@@ -256,10 +258,6 @@ fn zombie_movement(
                 let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
                 lin_vel.x = direction.x * speed;
                 lin_vel.z = direction.z * speed;
-                // also rotate
-                let rotation = (player_pos - zombie_transform.translation).normalize_or_zero();
-                ang_vel.x = rotation.x * speed;
-                ang_vel.z = rotation.z * speed;
                 continue;
             }
         }
@@ -286,9 +284,6 @@ fn zombie_movement(
         // Move forward
         lin_vel.x = direction.x * speed;
         lin_vel.z = direction.z * speed;
-        // also rotate
-        ang_vel.x = direction.x * speed;
-        ang_vel.z = direction.z * speed;
     }
 }
 
