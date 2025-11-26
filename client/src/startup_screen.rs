@@ -1,7 +1,8 @@
 use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 use bevy_simple_text_input::{
-    TextInput, TextInputSettings, TextInputSubmitEvent, TextInputTextFont, TextInputValue, TextInputTextColor,
+    TextInput, TextInputSettings, TextInputSubmitEvent, TextInputTextColor, TextInputTextFont,
+    TextInputValue,
 };
 
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -19,8 +20,8 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            url: "127.0.0.1:5000".to_string(),
-            // url: "138.199.203.159:5000".to_string(),
+            // url: "127.0.0.1:5000".to_string(),
+            url: "138.199.203.159:5000".to_string(),
         }
     }
 }
