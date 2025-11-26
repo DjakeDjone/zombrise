@@ -1,5 +1,5 @@
-use bevy::prelude::*;
-
+use bevy::{app::ScheduleRunnerPlugin, prelude::*};
+use std::time::Duration;
 
 use bevy_rapier3d::prelude::*;
 use bevy_replicon::prelude::*;
@@ -23,7 +23,11 @@ struct ZombieSpawnTimer(Timer);
 
 fn main() {
     App::new()
-        .add_plugins(MinimalPlugins)
+        .add_plugins(
+            MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
+                1.0 / 60.0,
+            ))),
+        )
         .add_plugins(RepliconPlugins)
         .add_plugins(RepliconRenetPlugins)
         .add_plugins(SharedPlugin)
