@@ -1,4 +1,3 @@
-
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
 use zombrise_shared::players::player::{Health, Player, PlayerOwner};
@@ -55,10 +54,10 @@ pub fn show_death_screen(
 
         // Unlock cursor when dead
         // Unlock cursor when dead
-        if let Ok(mut window) = window_query.single_mut() {
-            window.cursor_options.grab_mode = CursorGrabMode::None;
-            window.cursor_options.visible = true;
-        }
+        // if let Ok(mut window) = window_query.single_mut() {
+        //     window.cursor.grab_mode = CursorGrabMode::None;
+        //     window.cursor.visible = true;
+        // }
 
         // Spawn death screen UI
         commands
@@ -129,11 +128,10 @@ pub fn show_death_screen(
         }
 
         // Re-lock cursor
-        // Re-lock cursor
-        if let Ok(mut window) = window_query.single_mut() {
-            window.cursor_options.grab_mode = CursorGrabMode::Locked;
-            window.cursor_options.visible = false;
-        }
+        // if let Ok(mut window) = window_query.single_mut() {
+        //     window.cursor.grab_mode = CursorGrabMode::Locked;
+        //     window.cursor.visible = false;
+        // }
     }
 }
 

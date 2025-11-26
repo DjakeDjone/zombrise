@@ -3,7 +3,6 @@ use bevy::pbr::prelude::*;
 use bevy::prelude::*;
 use bevy::scene::SceneRoot;
 use bevy::window::{CursorGrabMode, PresentMode, PrimaryWindow, WindowPlugin};
-use bevy_core_pipeline::prelude::Camera3d;
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet2::{
     netcode::{ClientAuthentication, NetcodeClientTransport},
@@ -66,7 +65,7 @@ fn main() {
         )
         .add_systems(
             OnEnter(AppState::Playing),
-            (setup, setup_client, lock_cursor),
+            (setup, setup_client, lock_cursor, activate_game_cameras),
         )
         .add_systems(OnExit(AppState::Playing), cleanup_playing_state)
         .add_systems(
@@ -146,31 +145,52 @@ fn setup_client(
 }
 
 fn setup_camera(mut commands: Commands) {
+    println!("Setting up cameras...");
+    
     // 1. 3D Camera (Renders the game world)
     // Order 0: Renders first
+    // Start inactive - will be activated when entering Playing state
     commands.spawn((
         Camera3d::default(),
         Camera {
             order: 0,
+            is_active: false, // Inactive during startup screen
             ..default()
         },
         Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
         MainCamera,
     ));
+    println!("3D camera spawned (inactive)");
 
     // 2. UI Camera (Renders the Interface)
     // Order 1: Renders AFTER the 3D camera
-    // ClearColorConfig::None: Transparent background (don't erase the 3D world)
+    // Solid clear color for startup screen
     // IsDefaultUiCamera: Tells Bevy "Put all UI on this camera"
     commands.spawn((
-        Camera2d::default(),
+        Camera2d,
         Camera {
             order: 1,
-            clear_color: ClearColorConfig::None,
+            clear_color: ClearColorConfig::Custom(Color::srgb(0.15, 0.15, 0.2)),
             ..default()
         },
         IsDefaultUiCamera,
     ));
+    println!("UI camera spawned (active with clear color)");
+}
+
+fn activate_game_cameras(
+    mut camera_3d_query: Query<&mut Camera, With<MainCamera>>,
+    mut camera_2d_query: Query<&mut Camera, (With<Camera2d>, Without<MainCamera>)>,
+) {
+    // Activate the 3D camera
+    if let Ok(mut camera) = camera_3d_query.single_mut() {
+        camera.is_active = true;
+    }
+
+    // Change UI camera to transparent mode so it doesn't clear the 3D world
+    if let Ok(mut camera) = camera_2d_query.single_mut() {
+        camera.clear_color = ClearColorConfig::None;
+    }
 }
 
 fn setup(mut commands: Commands) {
@@ -356,7 +376,7 @@ fn camera_follow(
 }
 
 fn handle_camera_rotation(
-    mut mouse_motion: EventReader<MouseMotion>,
+    mut mouse_motion: bevy::prelude::MessageReader<MouseMotion>,
     mut camera_rotation: ResMut<CameraRotation>,
 ) {
     const SENSITIVITY: f32 = 0.003;
@@ -370,10 +390,10 @@ fn handle_camera_rotation(
 }
 
 fn lock_cursor(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
-    if let Ok(mut window) = window_query.single_mut() {
-        window.cursor_options.grab_mode = CursorGrabMode::Locked;
-        window.cursor_options.visible = false;
-    }
+    // if let Ok(mut window) = window_query.single_mut() {
+    //     window.cursor.grab_mode = CursorGrabMode::Locked;
+    //     window.cursor.visible = false;
+    // }
 }
 
 fn handle_escape_key(
@@ -381,10 +401,10 @@ fn handle_escape_key(
     mut window_query: Query<&mut Window, With<PrimaryWindow>>,
 ) {
     if keys.just_pressed(KeyCode::Escape) {
-        if let Ok(mut window) = window_query.single_mut() {
-            window.cursor_options.grab_mode = CursorGrabMode::None;
-            window.cursor_options.visible = true;
-        }
+        // if let Ok(mut window) = window_query.single_mut() {
+        //     window.cursor.grab_mode = CursorGrabMode::None;
+        //     window.cursor.visible = true;
+        // }
     }
 }
 
@@ -514,7 +534,7 @@ fn display_health_bar(
                             ..default()
                         },
                         BackgroundColor(Color::srgb(0.2, 0.2, 0.2).into()),
-                        BorderColor(Color::srgb(0.8, 0.8, 0.8).into()),
+                        // BorderColor::all(Color::srgb(0.8, 0.8, 0.8).into()),
                     ))
                     .with_children(|parent| {
                         // Health bar fill
