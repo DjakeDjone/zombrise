@@ -1,13 +1,10 @@
 use bevy::{
     ecs::{
         component::Component,
-        event::{Event, EventWriter},
-        query::{With, Without},
-        system::{Query, Res},
+        system::Res,
     },
     math::Vec3,
-    prelude::Reflect,
-    transform::components::Transform,
+    prelude::{Event, Message, Reflect},
 };
 
 #[cfg(feature = "client")]
@@ -44,16 +41,16 @@ pub struct PlayerOwner(pub ClientId);
 #[derive(Component)]
 pub struct MainCamera;
 
-#[derive(Event, Serialize, Deserialize)]
+#[derive(Event, Message, Serialize, Deserialize)]
 pub struct MovePlayer {
     pub direction: Vec3,
     pub camera_yaw: f32,
 }
 
-#[derive(Event, Serialize, Deserialize)]
+#[derive(Event, Message, Serialize, Deserialize)]
 pub struct PlayerAttack;
 
-#[derive(Event, Serialize, Deserialize)]
+#[derive(Event, Message, Serialize, Deserialize)]
 pub struct DamagePlayer {
     pub client_id: ClientId,
     pub amount: f32,
@@ -62,8 +59,8 @@ pub struct DamagePlayer {
 #[cfg(feature = "client")]
 pub fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut move_events: EventWriter<MovePlayer>,
-    mut attack_events: EventWriter<PlayerAttack>,
+    mut move_events: bevy::prelude::MessageWriter<MovePlayer>,
+    mut attack_events: bevy::prelude::MessageWriter<PlayerAttack>,
     camera_rotation: Option<Res<CameraRotation>>,
 ) {
     let mut direction = Vec3::ZERO;

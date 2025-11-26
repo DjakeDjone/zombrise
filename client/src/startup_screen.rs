@@ -1,8 +1,7 @@
 use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 use bevy_simple_text_input::{
-    TextInput, TextInputSettings, TextInputSubmitEvent, TextInputTextColor, TextInputTextFont,
-    TextInputValue,
+    TextInput, TextInputSettings, TextInputTextColor, TextInputTextFont, TextInputValue,
 };
 
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -36,6 +35,7 @@ pub(crate) struct ServerUrlInput;
 pub(crate) struct ConnectButton;
 
 pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConfig>) {
+    println!("Showing startup screen...");
     commands
         .spawn((
             Node {
@@ -90,7 +90,7 @@ pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConf
                     ..default()
                 },
                 BackgroundColor(Color::srgb(0.2, 0.2, 0.25).into()),
-                BorderColor(Color::srgb(0.4, 0.4, 0.5).into()),
+                // BorderColor::all(Color::srgb(0.4, 0.4, 0.5).into()),
                 TextInput,
                 TextInputTextFont(TextFont {
                     font_size: 20.0,
@@ -149,7 +149,6 @@ pub fn handle_startup_ui(
     mut next_state: ResMut<NextState<AppState>>,
     mut server_config: ResMut<ServerConfig>,
     input_query: Query<&TextInputValue, With<ServerUrlInput>>,
-    mut submit_events: EventReader<TextInputSubmitEvent>,
 ) {
     // Handle button interaction
     for (interaction, mut color) in &mut interaction_query {
@@ -170,20 +169,12 @@ pub fn handle_startup_ui(
             }
         }
     }
-
-    // Handle Enter key submission
-    for event in submit_events.read() {
-        if let Ok(input_value) = input_query.get(event.entity) {
-            server_config.url = input_value.0.clone();
-            next_state.set(AppState::Playing);
-        }
-    }
 }
 
 pub fn handle_copy_paste(
     mut input_query: Query<&mut TextInputValue, With<ServerUrlInput>>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut evr_kbd: EventReader<KeyboardInput>,
+    mut evr_kbd: bevy::prelude::MessageReader<KeyboardInput>,
 ) {
     // Check if Ctrl (or Cmd on Mac) is pressed
     let ctrl_pressed = keyboard_input.pressed(KeyCode::ControlLeft)

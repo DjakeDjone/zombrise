@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 zombrise_shared = { path = "../shared", features = ["client"] }
-bevy = { version = "0.16", default-features = false, features = [
+bevy = { version = "0.17", default-features = false, features = [
     "bevy_asset",
     "bevy_scene",
     "bevy_gltf",
@@ -26,10 +26,12 @@ bevy = { version = "0.16", default-features = false, features = [
     "x11",
     "wayland",
     "bevy_state",
+    "zstd_rust",
 ] }
-bevy_core_pipeline = "0.16"
-bevy_replicon = "0.33"
-bevy_replicon_renet2 = "0.9"
-renet2_netcode = "0.9"
-bevy_simple_text_input = "0.11"
+bevy_core_pipeline = "0.17"
+bevy_replicon = "0.36"
+bevy_replicon_renet2 = "0.11"
+renet2_netcode = "0.11"
+bevy_simple_text_input = "0.12"
 arboard = "3.6"
+avian3d = "0.4"

@@ -1,7 +1,7 @@
-use bevy::{app::ScheduleRunnerPlugin, prelude::*};
+use bevy::{app::ScheduleRunnerPlugin, asset::AssetPlugin, mesh::MeshPlugin, prelude::*, scene::ScenePlugin, state::app::StatesPlugin};
 use std::time::Duration;
 
-use bevy_rapier3d::prelude::*;
+use avian3d::prelude::*;
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet2::{
     netcode::{NetcodeServerTransport, ServerAuthentication},
@@ -28,10 +28,15 @@ fn main() {
                 1.0 / 60.0,
             ))),
         )
+        .add_plugins(AssetPlugin::default())
+        .add_plugins(MeshPlugin)
+        .add_plugins(ScenePlugin)
+        .add_plugins(StatesPlugin)
         .add_plugins(RepliconPlugins)
+        // .add_message::<ServerEvent>(Channel::Reliable)
         .add_plugins(RepliconRenetPlugins)
         .add_plugins(SharedPlugin)
-        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugins(PhysicsPlugins::default())
         .insert_resource(Time::<Fixed>::from_hz(60.0))
         .insert_resource(ZombieSpawnTimer(Timer::from_seconds(
             20.0,
@@ -40,15 +45,19 @@ fn main() {
         .add_systems(Startup, setup_server)
         .add_systems(
             Update,
-            (server_event_system, update_map_size, spawn_zombies),
+            (
+                server_event_system,
+                handle_move_player,
+                handle_player_attack,
+                update_map_size,
+                spawn_zombies,
+            ),
         )
         .add_systems(
             FixedUpdate,
             (
-                handle_move_player,
                 zombie_movement,
                 zombie_collision_damage,
-                handle_player_attack,
                 update_damage_flash,
                 remove_dead_players,
             ),
@@ -93,7 +102,7 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
         MapMarker,
         Replicated,
         Transform::from_xyz(0.0, -0.55, 0.0),
-        Collider::cuboid(28.0, 0.05, 28.0), // Flat ground: 56x0.1x56 units
+        Collider::cuboid(56.0, 0.1, 56.0), // Flat ground: 56x0.1x56 units
     ));
 
     // Spawn trees with collision
@@ -112,14 +121,17 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
             Replicated,
             Transform::from_translation(position),
             GlobalTransform::default(),
-            Collider::cylinder(1.0, 0.3), // Collision cylinder for tree trunk and canopy
+            Collider::cylinder(0.3, 2.0), // Collision cylinder for tree trunk and canopy
         ));
     }
 
     println!("Server started on {}", public_addr);
 }
 
-fn server_event_system(mut commands: Commands, mut server_events: EventReader<ServerEvent>) {
+fn server_event_system(
+    mut commands: Commands,
+    mut server_events: MessageReader<ServerEvent>,
+) {
     for event in server_events.read() {
         match event {
             ServerEvent::ClientConnected { client_id } => {
@@ -134,13 +146,12 @@ fn server_event_system(mut commands: Commands, mut server_events: EventReader<Se
                     Transform::from_xyz(0.0, 1.0, 0.0),
                     GlobalTransform::default(),
                     RigidBody::Dynamic,
-                    Collider::capsule_y(0.5, 0.5),
-                    Velocity::zero(),
-                    LockedAxes::ROTATION_LOCKED,
-                    Damping {
-                        linear_damping: 0.5,
-                        angular_damping: 0.0,
-                    },
+                    Collider::capsule(0.5, 1.0),
+                    LinearVelocity::ZERO,
+                    AngularVelocity::ZERO,
+                    LockedAxes::new().lock_rotation_x().lock_rotation_z(),
+                    LinearDamping(0.5),
+                    AngularDamping(0.0),
                 ));
             }
             ServerEvent::ClientDisconnected { client_id, reason } => {
@@ -151,15 +162,11 @@ fn server_event_system(mut commands: Commands, mut server_events: EventReader<Se
 }
 
 fn handle_move_player(
-    mut events: EventReader<FromClient<MovePlayer>>,
-    mut query: Query<(&PlayerOwner, &mut Velocity, &mut Transform)>,
+    mut events: MessageReader<FromClient<MovePlayer>>,
+    mut query: Query<(&PlayerOwner, &mut LinearVelocity, &mut Transform)>,
 ) {
     let speed = 5.0;
-    for FromClient {
-        client_entity: _,
-        event,
-    } in events.read()
-    {
+    for FromClient { message: event, .. } in events.read() {
         // Note: In bevy_replicon, each client only sends events for themselves
         // So we can apply the movement to all players
         for (_, mut velocity, mut transform) in &mut query {
@@ -167,8 +174,8 @@ fn handle_move_player(
             let yaw_rotation = Quat::from_rotation_y(event.camera_yaw);
             let rotated_direction = yaw_rotation * event.direction;
 
-            velocity.linvel.x = rotated_direction.x * speed;
-            velocity.linvel.z = rotated_direction.z * speed; // Rotate player to face movement direction (only in XZ plane)
+            velocity.x = rotated_direction.x * speed;
+            velocity.z = rotated_direction.z * speed; // Rotate player to face movement direction (only in XZ plane)
             let horizontal_direction = Vec3::new(rotated_direction.x, 0.0, rotated_direction.z);
             if horizontal_direction.length() > 0.01 {
                 let target_rotation =
@@ -178,8 +185,8 @@ fn handle_move_player(
 
             if event.direction.y > 0.0 {
                 // Check if on ground, for simplicity, assume if y velocity is small
-                if velocity.linvel.y.abs() < 0.1 {
-                    velocity.linvel.y = 5.0; // jump velocity
+                if velocity.y.abs() < 0.1 {
+                    velocity.y = 5.0; // jump velocity
                 }
             }
         }
@@ -211,26 +218,25 @@ fn spawn_zombies(mut commands: Commands, time: Res<Time>, mut timer: ResMut<Zomb
             Transform::from_xyz(x, 1.0, z),
             GlobalTransform::default(),
             RigidBody::Dynamic,
-            Collider::capsule_y(0.5, 0.5),
-            Velocity::zero(),
-            LockedAxes::ROTATION_LOCKED,
-            Damping {
-                linear_damping: 0.5,
-                angular_damping: 0.0,
-            },
+            Collider::capsule(0.5, 1.0),
+            LinearVelocity::ZERO,
+            AngularVelocity::ZERO,
+            LockedAxes::new().lock_rotation_x().lock_rotation_z(),
+            LinearDamping(0.5),
+            AngularDamping(0.0),
         ));
         println!("Zombie spawned at {}, {}", x, z);
     }
 }
 
 fn zombie_movement(
-    mut zombie_query: Query<(&mut Velocity, &Transform), With<Zombie>>,
+    mut zombie_query: Query<(&mut LinearVelocity, &mut AngularVelocity, &Transform), With<Zombie>>,
     player_query: Query<&Transform, With<Player>>,
 ) {
     let speed = 2.0;
     let chase_range = 10.0;
 
-    for (mut velocity, zombie_transform) in &mut zombie_query {
+    for (mut lin_vel, mut ang_vel, zombie_transform) in &mut zombie_query {
         let mut nearest_player_pos: Option<Vec3> = None;
         let mut min_dist = f32::MAX;
 
@@ -248,12 +254,12 @@ fn zombie_movement(
             if min_dist < chase_range {
                 // Chase
                 let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
-                velocity.linvel.x = direction.x * speed;
-                velocity.linvel.z = direction.z * speed;
+                lin_vel.x = direction.x * speed;
+                lin_vel.z = direction.z * speed;
                 // also rotate
                 let rotation = (player_pos - zombie_transform.translation).normalize_or_zero();
-                velocity.angvel.x = rotation.x * speed;
-                velocity.angvel.z = rotation.z * speed;
+                ang_vel.x = rotation.x * speed;
+                ang_vel.z = rotation.z * speed;
                 continue;
             }
         }
@@ -263,8 +269,8 @@ fn zombie_movement(
         let random_number = rand::random::<f32>();
 
         let mut direction = Vec3::ZERO;
-        if velocity.linvel.length_squared() > 0.01 {
-            direction = velocity.linvel.normalize();
+        if lin_vel.length_squared() > 0.01 {
+            direction = lin_vel.normalize();
         }
 
         if random_number < change_direction_probability || direction == Vec3::ZERO {
@@ -278,11 +284,11 @@ fn zombie_movement(
         }
 
         // Move forward
-        velocity.linvel.x = direction.x * speed;
-        velocity.linvel.z = direction.z * speed;
+        lin_vel.x = direction.x * speed;
+        lin_vel.z = direction.z * speed;
         // also rotate
-        velocity.angvel.x = direction.x * speed;
-        velocity.angvel.z = direction.z * speed;
+        ang_vel.x = direction.x * speed;
+        ang_vel.z = direction.z * speed;
     }
 }
 
@@ -314,7 +320,7 @@ fn zombie_collision_damage(
 }
 
 fn handle_player_attack(
-    mut events: EventReader<FromClient<PlayerAttack>>,
+    mut events: MessageReader<FromClient<PlayerAttack>>,
     mut player_query: Query<
         (
             Entity,
@@ -331,10 +337,7 @@ fn handle_player_attack(
     const ATTACK_RANGE: f32 = 2.0;
     const PLAYER_DAMAGE: f32 = 10.0;
 
-    for FromClient {
-        client_entity: _, ..
-    } in events.read()
-    {
+    for FromClient { .. } in events.read() {
         // Note: In bevy_replicon, each client only sends events for themselves
         let mut attacker_pos: Option<Vec3> = None;
         let mut attacker_entity: Option<Entity> = None;
