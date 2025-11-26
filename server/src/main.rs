@@ -1,21 +1,18 @@
 use bevy::prelude::*;
 
-use bevy::app::ScheduleRunnerPlugin;
+
 use bevy_rapier3d::prelude::*;
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet2::{
-    renet2::{
-        ConnectionConfig, RenetServer, ServerEvent,
-    },
     netcode::{NetcodeServerTransport, ServerAuthentication},
-    RepliconRenetPlugins,
-    RenetChannelsExt,
+    renet2::{ConnectionConfig, RenetServer, ServerEvent},
+    RenetChannelsExt, RepliconRenetPlugins,
 };
-use renet2_netcode::NativeSocket;
 use rand::Rng;
+use renet2_netcode::NativeSocket;
 use std::{
     net::{SocketAddr, UdpSocket},
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 use zombrise_shared::players::player::{DamageFlash, Health, Player, PlayerAttack, PlayerOwner};
 use zombrise_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
@@ -26,23 +23,7 @@ struct ZombieSpawnTimer(Timer);
 
 fn main() {
     App::new()
-        .add_plugins(
-            DefaultPlugins
-                .build()
-                .disable::<bevy::render::RenderPlugin>()
-                .disable::<bevy::core_pipeline::CorePipelinePlugin>()
-                .disable::<bevy::sprite::SpritePlugin>()
-                .disable::<bevy::pbr::PbrPlugin>()
-                .disable::<bevy::ui::UiPlugin>()
-                .disable::<bevy::text::TextPlugin>()
-                .disable::<bevy::gizmos::GizmoPlugin>()
-                .disable::<bevy::gltf::GltfPlugin>(),
-        )
-        .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
-            1.0 / 60.0,
-        )))
-        .init_asset::<Mesh>()
-        .init_asset::<Scene>()
+        .add_plugins(MinimalPlugins)
         .add_plugins(RepliconPlugins)
         .add_plugins(RepliconRenetPlugins)
         .add_plugins(SharedPlugin)
@@ -108,7 +89,6 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
         MapMarker,
         Replicated,
         Transform::from_xyz(0.0, -0.55, 0.0),
-        Visibility::default(),
         Collider::cuboid(28.0, 0.05, 28.0), // Flat ground: 56x0.1x56 units
     ));
 
@@ -171,29 +151,33 @@ fn handle_move_player(
     mut query: Query<(&PlayerOwner, &mut Velocity, &mut Transform)>,
 ) {
     let speed = 5.0;
-    for FromClient { client_entity: _, event } in events.read() {
+    for FromClient {
+        client_entity: _,
+        event,
+    } in events.read()
+    {
         // Note: In bevy_replicon, each client only sends events for themselves
         // So we can apply the movement to all players
         for (_, mut velocity, mut transform) in &mut query {
-                // Rotate the input direction by the camera yaw
-                let yaw_rotation = Quat::from_rotation_y(event.camera_yaw);
-                let rotated_direction = yaw_rotation * event.direction;
+            // Rotate the input direction by the camera yaw
+            let yaw_rotation = Quat::from_rotation_y(event.camera_yaw);
+            let rotated_direction = yaw_rotation * event.direction;
 
-                velocity.linvel.x = rotated_direction.x * speed;
-                velocity.linvel.z = rotated_direction.z * speed; // Rotate player to face movement direction (only in XZ plane)
-                let horizontal_direction = Vec3::new(rotated_direction.x, 0.0, rotated_direction.z);
-                if horizontal_direction.length() > 0.01 {
-                    let target_rotation =
-                        Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
-                    transform.rotation = target_rotation;
-                }
+            velocity.linvel.x = rotated_direction.x * speed;
+            velocity.linvel.z = rotated_direction.z * speed; // Rotate player to face movement direction (only in XZ plane)
+            let horizontal_direction = Vec3::new(rotated_direction.x, 0.0, rotated_direction.z);
+            if horizontal_direction.length() > 0.01 {
+                let target_rotation =
+                    Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
+                transform.rotation = target_rotation;
+            }
 
-                if event.direction.y > 0.0 {
-                    // Check if on ground, for simplicity, assume if y velocity is small
-                    if velocity.linvel.y.abs() < 0.1 {
-                        velocity.linvel.y = 5.0; // jump velocity
-                    }
+            if event.direction.y > 0.0 {
+                // Check if on ground, for simplicity, assume if y velocity is small
+                if velocity.linvel.y.abs() < 0.1 {
+                    velocity.linvel.y = 5.0; // jump velocity
                 }
+            }
         }
     }
 }
@@ -343,16 +327,19 @@ fn handle_player_attack(
     const ATTACK_RANGE: f32 = 2.0;
     const PLAYER_DAMAGE: f32 = 10.0;
 
-    for FromClient { client_entity: _, .. } in events.read() {
+    for FromClient {
+        client_entity: _, ..
+    } in events.read()
+    {
         // Note: In bevy_replicon, each client only sends events for themselves
         let mut attacker_pos: Option<Vec3> = None;
         let mut attacker_entity: Option<Entity> = None;
 
         // Find the attacking player (there should only be one per event)
         for (entity, _, transform, _, _) in &player_query {
-                attacker_pos = Some(transform.translation);
-                attacker_entity = Some(entity);
-                break;
+            attacker_pos = Some(transform.translation);
+            attacker_entity = Some(entity);
+            break;
         }
 
         if let Some(attacker_pos) = attacker_pos {
