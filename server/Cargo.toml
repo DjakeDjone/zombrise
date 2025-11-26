@@ -11,14 +11,6 @@ bevy = { version = "0.16", default-features = false, features = [
     "bevy_scene",
     "serialize",
     "bevy_state",
-    "bevy_render",
-    "bevy_core_pipeline",
-    "bevy_sprite",
-    "bevy_pbr",
-    "bevy_ui",
-    "bevy_text",
-    "bevy_gizmos",
-    "bevy_gltf",
 ] }
 bevy_replicon = "0.33"
 bevy_replicon_renet2 = "0.9"
