@@ -12,6 +12,7 @@ bevy = { version = "0.17", default-features = false, features = [
     "serialize",
     "animation",
     "bevy_ui",
+    "bevy_ui_render",
     "bevy_winit",
     "bevy_window",
     "bevy_core_pipeline",

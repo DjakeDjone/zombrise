@@ -35,8 +35,8 @@ pub(crate) struct ServerUrlInput;
 pub(crate) struct ConnectButton;
 
 pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConfig>) {
-    println!("Showing startup screen...");
-    commands
+    println!("=== SHOW_STARTUP_SCREEN CALLED ===");
+    let root_entity = commands
         .spawn((
             Node {
                 width: Val::Percent(100.0),
@@ -51,7 +51,7 @@ pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConf
         ))
         .with_children(|parent| {
             // Title
-            parent.spawn((
+            let title_entity = parent.spawn((
                 Text::new("Zombrise 3D"),
                 TextFont {
                     font_size: 60.0,
@@ -62,7 +62,8 @@ pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConf
                     margin: UiRect::bottom(Val::Px(50.0)),
                     ..default()
                 },
-            ));
+            )).id();
+            println!("Title spawned: {:?}", title_entity);
 
             // Server URL label
             parent.spawn((
@@ -129,7 +130,9 @@ pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConf
                         TextColor(Color::srgb(1.0, 1.0, 1.0)),
                     ));
                 });
-        });
+        }).id();
+    println!("Root entity spawned: {:?}", root_entity);
+    println!("=== SHOW_STARTUP_SCREEN COMPLETE ===");
 }
 
 pub fn cleanup_startup_screen(

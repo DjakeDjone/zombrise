@@ -2,7 +2,7 @@ use bevy::input::mouse::MouseMotion;
 use bevy::pbr::prelude::*;
 use bevy::prelude::*;
 use bevy::scene::SceneRoot;
-use bevy::window::{CursorGrabMode, PresentMode, PrimaryWindow, WindowPlugin};
+use bevy::window::{PresentMode, PrimaryWindow, WindowPlugin};
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet2::{
     netcode::{ClientAuthentication, NetcodeClientTransport},
@@ -57,6 +57,12 @@ fn main() {
         })
         .init_resource::<PlayerDied>()
         .add_systems(Startup, setup_camera)
+        .register_type::<Transform>()
+        .register_type::<GlobalTransform>()
+        .register_type::<Visibility>()
+        .register_type::<InheritedVisibility>()
+        .register_type::<ViewVisibility>()
+        .register_type::<bevy::transform::components::TransformTreeChanged>()
         .add_systems(OnEnter(AppState::StartupScreen), show_startup_screen)
         .add_systems(OnExit(AppState::StartupScreen), cleanup_startup_screen)
         .add_systems(
@@ -145,37 +151,38 @@ fn setup_client(
 }
 
 fn setup_camera(mut commands: Commands) {
-    println!("Setting up cameras...");
+    println!("=== SETUP_CAMERA CALLED ===");
     
-    // 1. 3D Camera (Renders the game world)
-    // Order 0: Renders first
+    // 1. 3D Camera (Renders the game world) - RENDER FIRST
     // Start inactive - will be activated when entering Playing state
-    commands.spawn((
+    let camera_3d_entity = commands.spawn((
         Camera3d::default(),
         Camera {
-            order: 0,
+            order: 0, // Render first
             is_active: false, // Inactive during startup screen
+            clear_color: ClearColorConfig::Custom(Color::srgb(0.64, 0.74, 0.88)), // Sky color
             ..default()
         },
         Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
         MainCamera,
-    ));
-    println!("3D camera spawned (inactive)");
+    )).id();
+    println!("3D camera spawned (inactive): {:?}", camera_3d_entity);
 
-    // 2. UI Camera (Renders the Interface)
-    // Order 1: Renders AFTER the 3D camera
+    // 2. UI Camera (Renders the Interface) - RENDER SECOND
+    // This camera handles all UI rendering
     // Solid clear color for startup screen
-    // IsDefaultUiCamera: Tells Bevy "Put all UI on this camera"
-    commands.spawn((
+    let camera_2d_entity = commands.spawn((
         Camera2d,
         Camera {
-            order: 1,
+            order: 1, // Render after 3D camera
             clear_color: ClearColorConfig::Custom(Color::srgb(0.15, 0.15, 0.2)),
             ..default()
         },
         IsDefaultUiCamera,
-    ));
-    println!("UI camera spawned (active with clear color)");
+    )).id();
+    println!("UI camera spawned (active with clear color): {:?}", camera_2d_entity);
+    
+    println!("=== SETUP_CAMERA COMPLETE ===");
 }
 
 fn activate_game_cameras(
@@ -194,20 +201,11 @@ fn activate_game_cameras(
 }
 
 fn setup(mut commands: Commands) {
-    // Light
-    commands.spawn((
-        PointLight {
-            shadows_enabled: true,
-            ..default()
-        },
-        Transform::from_xyz(4.0, 8.0, 4.0),
-        Visibility::default(),
-    ));
-
-    // Additional directional light for better illumination
+    // Directional light (Sun) with higher illuminance
     commands.spawn((
         DirectionalLight {
             shadows_enabled: true,
+            illuminance: 10_000.0,
             ..default()
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::YXZ, -0.5, -0.5, 0.0)),
@@ -235,7 +233,12 @@ fn spawn_map_visuals(
         // Don't insert Transform - it's already replicated from server
         commands
             .entity(entity)
-            .insert((Visibility::default(), MapVisualsSpawned));
+            .insert((
+                Visibility::default(),
+                InheritedVisibility::default(),
+                ViewVisibility::default(),
+                MapVisualsSpawned,
+            ));
         // Spawn landscape without trees (trees come from server)
         spawn_snow_landscape(
             &mut commands,
@@ -281,6 +284,8 @@ fn spawn_tree_visuals(
                 Mesh3d(trunk_mesh.clone()),
                 MeshMaterial3d(bark_material.clone()),
                 Visibility::default(),
+                InheritedVisibility::default(),
+                ViewVisibility::default(),
                 TreeVisualsSpawned,
             ))
             .with_children(|parent| {
@@ -294,6 +299,8 @@ fn spawn_tree_visuals(
                         MeshMaterial3d(foliage_material.clone()),
                         lower_canopy,
                         Visibility::default(),
+                        InheritedVisibility::default(),
+                        ViewVisibility::default(),
                     ),
                     Name::new("Evergreen Foliage (Lower)"),
                 ));
@@ -308,6 +315,8 @@ fn spawn_tree_visuals(
                         MeshMaterial3d(foliage_material.clone()),
                         upper_canopy,
                         Visibility::default(),
+                        InheritedVisibility::default(),
+                        ViewVisibility::default(),
                     ),
                     Name::new("Evergreen Foliage (Upper)"),
                 ));
@@ -326,6 +335,8 @@ fn spawn_player_visuals(
             Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
             MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
             Visibility::default(),
+            InheritedVisibility::default(),
+            ViewVisibility::default(),
             PlayerVisualsSpawned,
         ));
     }
@@ -337,11 +348,22 @@ fn spawn_zombie_visuals(
     asset_server: Res<AssetServer>,
 ) {
     for entity in query.iter() {
-        // Don't insert Transform - it's already replicated from server
+        // Spawn the scene as a child to avoid Transform conflicts
+        commands.entity(entity).with_children(|parent| {
+            parent.spawn((
+                SceneRoot(asset_server.load("zombie.glb#Scene0")),
+                Visibility::default(),
+                InheritedVisibility::default(),
+                ViewVisibility::default(),
+                Transform::default(),
+                GlobalTransform::default(),
+            ));
+        });
         commands.entity(entity).insert((
-            SceneRoot(asset_server.load("zombie.glb#Scene0")),
-            Visibility::default(),
             ZombieVisualsSpawned,
+            Visibility::default(),
+            InheritedVisibility::default(),
+            ViewVisibility::default(),
         ));
     }
 }

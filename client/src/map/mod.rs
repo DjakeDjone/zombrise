@@ -79,6 +79,8 @@ fn spawn_plateau(
             MeshMaterial3d(snow_material.clone()),
             Transform::from_xyz(0.0, -config.base_height * 0.5, 0.0),
             Visibility::default(),
+            InheritedVisibility::default(),
+            ViewVisibility::default(),
             Name::new("Snow Plateau"),
         ))
         .insert(ChildOf(parent));
@@ -106,6 +108,8 @@ fn spawn_frozen_pond(
                 config.radius * 0.16,
             ),
             Visibility::default(),
+            InheritedVisibility::default(),
+            ViewVisibility::default(),
             Name::new("Frozen Pond"),
         ))
         .insert(ChildOf(parent));
