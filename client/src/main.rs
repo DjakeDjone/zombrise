@@ -1,26 +1,22 @@
 use bevy::input::mouse::MouseMotion;
-use bevy::window::{CursorGrabMode, PrimaryWindow};
 use bevy::prelude::*;
+use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet::{
-    renet::{
-        transport::{ClientAuthentication, NetcodeClientTransport},
-        ConnectionConfig, RenetClient,
-    },
+    renet::{ConnectionConfig, RenetClient},
     RenetChannelsExt, RepliconRenetPlugins,
 };
-use bevy_simple_text_input::TextInputPlugin;
-use zombrise_shared::players::player::{
-    handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
-};
-use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
-use zombrise_shared::zombie::zombie::{
-    setup_zombie_animation, Zombie, ZombieAnimations,
-};
+use renet_netcode::{ClientAuthentication, NetcodeClientTransport};
+// use bevy_simple_text_input::TextInputPlugin;  // TODO: Find Bevy 0.17 compatible version
 use std::{
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
     time::SystemTime,
 };
+use zombrise_shared::players::player::{
+    handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
+};
+use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
+use zombrise_shared::zombie::zombie::{setup_zombie_animation, Zombie, ZombieAnimations};
 
 mod map;
 use map::{spawn_snow_landscape, SnowLandscapeConfig};
@@ -39,11 +35,18 @@ pub struct MyClientId(pub u64);
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Zombrise".to_string(),
+                resolution: (1280, 720).into(),
+                ..default()
+            }),
+            ..default()
+        }))
         .add_plugins(RepliconPlugins)
         .add_plugins(RepliconRenetPlugins)
         .add_plugins(SharedPlugin)
-        .add_plugins(TextInputPlugin)
+        // .add_plugins(TextInputPlugin)  // TODO: Find Bevy 0.17 compatible version
         .init_state::<AppState>()
         .init_resource::<ServerConfig>()
         .insert_resource(CameraRotation {
@@ -56,11 +59,14 @@ fn main() {
         .add_systems(OnExit(AppState::StartupScreen), cleanup_startup_screen)
         .add_systems(
             Update,
-            (handle_startup_ui, handle_copy_paste).run_if(in_state(AppState::StartupScreen)),
+            (
+                handle_startup_ui.run_if(in_state(AppState::StartupScreen)),
+                handle_copy_paste.run_if(in_state(AppState::StartupScreen)),
+            ),
         )
         .add_systems(
             OnEnter(AppState::Playing),
-            (setup, setup_client, lock_cursor),
+            (setup, setup_client, lock_cursor, spawn_game_camera),
         )
         .add_systems(
             Update,
@@ -90,8 +96,8 @@ fn setup_client(
     network_channels: Res<RepliconChannels>,
     server_config: Res<ServerConfig>,
 ) {
-    let server_channels_config = network_channels.get_server_configs();
-    let client_channels_config = network_channels.get_client_configs();
+    let server_channels_config = network_channels.server_configs();
+    let client_channels_config = network_channels.client_configs();
 
     let client = RenetClient::new(ConnectionConfig {
         server_channels_config,
@@ -134,35 +140,35 @@ fn setup_client(
 
 fn setup_camera(mut commands: Commands) {
     // Camera - spawn at startup for UI rendering
+    commands.spawn(Camera2d);
+}
+
+fn spawn_game_camera(mut commands: Commands) {
     commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
-            ..default()
-        },
+        Camera3d::default(),
+        Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
         MainCamera,
     ));
 }
 
 fn setup(mut commands: Commands) {
     // Light
-    commands.spawn(PointLightBundle {
-        point_light: PointLight {
+    commands.spawn((
+        PointLight {
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
-        ..default()
-    });
+        Transform::from_xyz(4.0, 8.0, 4.0),
+    ));
 
     // Additional directional light for better illumination
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
+    commands.spawn((
+        DirectionalLight {
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_rotation(Quat::from_euler(EulerRot::YXZ, -0.5, -0.5, 0.0)),
-        ..default()
-    });
+        Transform::from_rotation(Quat::from_euler(EulerRot::YXZ, -0.5, -0.5, 0.0)),
+    ));
 }
 
 fn spawn_map_visuals(
@@ -172,7 +178,7 @@ fn spawn_map_visuals(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for entity in query.iter() {
-        commands.entity(entity).insert(SpatialBundle::default());
+        commands.entity(entity).insert(Transform::default());
         // Spawn landscape without trees (trees come from server)
         spawn_snow_landscape(
             &mut commands,
@@ -215,24 +221,22 @@ fn spawn_tree_visuals(
 
         commands
             .entity(entity)
-            .insert(PbrBundle {
-                mesh: trunk_mesh.clone(),
-                material: bark_material.clone(),
-                transform: trunk_transform,
-                ..default()
-            })
+            .insert((
+                Mesh3d(trunk_mesh.clone()),
+                MeshMaterial3d(bark_material.clone()),
+                trunk_transform,
+            ))
             .with_children(|parent| {
                 // Lower canopy (snow-covered)
                 let mut lower_canopy = Transform::from_translation(Vec3::new(0.0, 1.05, 0.0));
                 lower_canopy.scale = Vec3::new(1.6, 1.15, 1.6);
 
                 parent.spawn((
-                    PbrBundle {
-                        mesh: canopy_mesh.clone(),
-                        material: foliage_material.clone(),
-                        transform: lower_canopy,
-                        ..default()
-                    },
+                    (
+                        Mesh3d(canopy_mesh.clone()),
+                        MeshMaterial3d(foliage_material.clone()),
+                        lower_canopy,
+                    ),
                     Name::new("Evergreen Foliage (Lower)"),
                 ));
 
@@ -241,12 +245,11 @@ fn spawn_tree_visuals(
                 upper_canopy.scale = Vec3::new(1.0, 1.1, 1.0);
 
                 parent.spawn((
-                    PbrBundle {
-                        mesh: canopy_mesh.clone(),
-                        material: foliage_material.clone(),
-                        transform: upper_canopy,
-                        ..default()
-                    },
+                    (
+                        Mesh3d(canopy_mesh.clone()),
+                        MeshMaterial3d(foliage_material.clone()),
+                        upper_canopy,
+                    ),
                     Name::new("Evergreen Foliage (Upper)"),
                 ));
             });
@@ -260,11 +263,10 @@ fn spawn_player_visuals(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for entity in query.iter() {
-        commands.entity(entity).insert(PbrBundle {
-            mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-            material: materials.add(Color::srgb(0.8, 0.7, 0.6)),
-            ..default()
-        });
+        commands.entity(entity).insert((
+            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+            MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
+        ));
     }
 }
 
@@ -274,11 +276,10 @@ fn spawn_zombie_visuals(
     asset_server: Res<AssetServer>,
 ) {
     for entity in query.iter() {
-        commands.entity(entity).insert(SceneBundle {
-            scene: asset_server.load("zombie.glb#Scene0"),
-            transform: Transform::from_scale(Vec3::splat(1.0)),
-            ..default()
-        });
+        commands.entity(entity).insert((
+            SceneRoot(asset_server.load("zombie.glb#Scene0")),
+            Transform::from_scale(Vec3::splat(1.0)),
+        ));
     }
 }
 
@@ -289,8 +290,8 @@ fn camera_follow(
     camera_rotation: Res<CameraRotation>,
 ) {
     for (player_transform, owner) in player_query.iter() {
-        if owner.0.get() == my_client_id.0 {
-            if let Ok(mut camera_transform) = camera_query.get_single_mut() {
+        if owner.0 == my_client_id.0 {
+            if let Ok(mut camera_transform) = camera_query.single_mut() {
                 // Calculate camera offset using yaw and pitch
                 let distance = 10.0;
                 let yaw = camera_rotation.yaw;
@@ -312,7 +313,7 @@ fn camera_follow(
 }
 
 fn handle_camera_rotation(
-    mut mouse_motion: EventReader<MouseMotion>,
+    mut mouse_motion: MessageReader<MouseMotion>,
     mut camera_rotation: ResMut<CameraRotation>,
 ) {
     const SENSITIVITY: f32 = 0.003;
@@ -325,48 +326,48 @@ fn handle_camera_rotation(
     }
 }
 
-fn lock_cursor(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
-    if let Ok(mut window) = window_query.get_single_mut() {
-        window.cursor.grab_mode = CursorGrabMode::Locked;
-        window.cursor.visible = false;
+fn lock_cursor(mut cursor_options: Query<&mut CursorOptions, With<PrimaryWindow>>) {
+    if let Ok(mut options) = cursor_options.single_mut() {
+        options.grab_mode = CursorGrabMode::Locked;
+        options.visible = false;
     }
 }
 
 fn handle_escape_key(
     keys: Res<ButtonInput<KeyCode>>,
-    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
+    mut cursor_options: Query<&mut CursorOptions, With<PrimaryWindow>>,
 ) {
     if keys.just_pressed(KeyCode::Escape) {
-        if let Ok(mut window) = window_query.get_single_mut() {
-            window.cursor.grab_mode = CursorGrabMode::None;
-            window.cursor.visible = true;
+        if let Ok(mut options) = cursor_options.single_mut() {
+            options.grab_mode = CursorGrabMode::None;
+            options.visible = true;
         }
     }
 }
 
 fn animate_player_damage(
-    mut player_query: Query<
-        (&DamageFlash, &Handle<StandardMaterial>, &PlayerOwner),
-        (With<Player>, Changed<DamageFlash>),
-    >,
+    player_query: Query<(Entity, &DamageFlash, &PlayerOwner), (With<Player>, Changed<DamageFlash>)>,
+    mut materials_query: Query<&mut MeshMaterial3d<StandardMaterial>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     my_client_id: Res<MyClientId>,
 ) {
-    for (damage_flash, material_handle, owner) in player_query.iter_mut() {
+    for (entity, damage_flash, owner) in player_query.iter() {
         // Only animate our own player
-        if owner.0.get() == my_client_id.0 {
-            if let Some(material) = materials.get_mut(material_handle) {
-                if damage_flash.timer > 0.0 {
-                    // Flash red when damaged
-                    let flash_intensity = (damage_flash.timer / 0.3).clamp(0.0, 1.0);
-                    material.base_color = Color::srgb(
-                        0.8 + 0.2 * flash_intensity,
-                        0.7 - 0.5 * flash_intensity,
-                        0.6 - 0.4 * flash_intensity,
-                    );
-                } else {
-                    // Reset to normal color
-                    material.base_color = Color::srgb(0.8, 0.7, 0.6);
+        if owner.0 == my_client_id.0 {
+            if let Ok(material_handle) = materials_query.get_mut(entity) {
+                if let Some(material) = materials.get_mut(&material_handle.0) {
+                    if damage_flash.timer > 0.0 {
+                        // Flash red when damaged
+                        let flash_intensity = (damage_flash.timer / 0.3).clamp(0.0, 1.0);
+                        material.base_color = Color::srgb(
+                            0.8 + 0.2 * flash_intensity,
+                            0.7 - 0.5 * flash_intensity,
+                            0.6 - 0.4 * flash_intensity,
+                        );
+                    } else {
+                        // Reset to normal color
+                        material.base_color = Color::srgb(0.8, 0.7, 0.6);
+                    }
                 }
             }
         }
@@ -389,15 +390,15 @@ fn display_health_bar(
     my_client_id: Res<MyClientId>,
     health_ui_query: Query<Entity, With<HealthBarUI>>,
     mut health_fill_query: Query<
-        (&mut Style, &mut BackgroundColor),
+        (&mut Node, &mut BackgroundColor),
         (With<HealthBarFill>, Without<HealthText>),
     >,
-    mut health_text_query: Query<&mut Text, With<HealthText>>,
+    mut health_text_query: Query<(&mut Text, &mut TextColor), With<HealthText>>,
 ) {
     // Find our player's health
     let mut our_health: Option<&Health> = None;
     for (health, owner) in player_query.iter() {
-        if owner.0.get() == my_client_id.0 {
+        if owner.0 == my_client_id.0 {
             our_health = Some(health);
             break;
         }
@@ -408,16 +409,13 @@ fn display_health_bar(
         // Create health bar UI
         commands
             .spawn((
-                NodeBundle {
-                    style: Style {
-                        position_type: PositionType::Absolute,
-                        left: Val::Px(20.0),
-                        top: Val::Px(20.0),
-                        width: Val::Px(300.0),
-                        height: Val::Px(50.0),
-                        flex_direction: FlexDirection::Column,
-                        ..default()
-                    },
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(20.0),
+                    top: Val::Px(20.0),
+                    width: Val::Px(300.0),
+                    height: Val::Px(50.0),
+                    flex_direction: FlexDirection::Column,
                     ..default()
                 },
                 HealthBarUI,
@@ -425,46 +423,40 @@ fn display_health_bar(
             .with_children(|parent| {
                 // Health text
                 parent.spawn((
-                    TextBundle::from_section(
-                        "Health: 100/100 (100%)",
-                        TextStyle {
-                            font_size: 20.0,
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                    )
-                    .with_style(Style {
+                    Text::new("Health: 100/100 (100%)"),
+                    TextFont {
+                        font_size: 20.0,
+                        ..default()
+                    },
+                    TextColor(Color::WHITE),
+                    Node {
                         margin: UiRect::bottom(Val::Px(5.0)),
                         ..default()
-                    }),
+                    },
                     HealthText,
                 ));
 
                 // Health bar background
                 parent
-                    .spawn(NodeBundle {
-                        style: Style {
+                    .spawn((
+                        Node {
                             width: Val::Px(300.0),
                             height: Val::Px(20.0),
                             border: UiRect::all(Val::Px(2.0)),
                             ..default()
                         },
-                        background_color: Color::srgb(0.2, 0.2, 0.2).into(),
-                        border_color: Color::srgb(0.8, 0.8, 0.8).into(),
-                        ..default()
-                    })
+                        BackgroundColor(Color::srgb(0.2, 0.2, 0.2).into()),
+                        BorderColor::from(Color::srgb(0.8, 0.8, 0.8)),
+                    ))
                     .with_children(|parent| {
                         // Health bar fill
                         parent.spawn((
-                            NodeBundle {
-                                style: Style {
-                                    width: Val::Percent(100.0),
-                                    height: Val::Percent(100.0),
-                                    ..default()
-                                },
-                                background_color: Color::srgb(0.2, 0.8, 0.2).into(),
+                            Node {
+                                width: Val::Percent(100.0),
+                                height: Val::Percent(100.0),
                                 ..default()
                             },
+                            BackgroundColor(Color::srgb(0.2, 0.8, 0.2).into()),
                             HealthBarFill,
                         ));
                     });
@@ -485,20 +477,20 @@ fn display_health_bar(
         };
 
         // Update health bar fill width and color
-        if let Ok((mut style, mut bg_color)) = health_fill_query.get_single_mut() {
-            style.width = Val::Percent(health_percent);
+        if let Ok((mut node, mut bg_color)) = health_fill_query.single_mut() {
+            node.width = Val::Percent(health_percent);
             *bg_color = bar_color.into();
         }
 
         // Update health text
-        if let Ok(mut text) = health_text_query.get_single_mut() {
-            text.sections[0].value = format!(
+        if let Ok((mut text, mut text_color)) = health_text_query.single_mut() {
+            **text = format!(
                 "Health: {:.0}/{:.0} ({:.0}%)",
                 health.current, health.max, health_percent
             );
 
             // Change text color based on health percentage
-            text.sections[0].style.color = if health_percent > 60.0 {
+            text_color.0 = if health_percent > 60.0 {
                 Color::srgb(0.2, 1.0, 0.2) // Green
             } else if health_percent > 30.0 {
                 Color::srgb(1.0, 0.8, 0.0) // Yellow

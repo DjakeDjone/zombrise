@@ -26,7 +26,7 @@ impl Plugin for SharedPlugin {
         app.replicate::<Transform>();
         app.replicate::<MapMarker>();
         app.replicate::<TreeMarker>();
-        app.add_client_event::<MovePlayer>(ChannelKind::Unordered);
-        app.add_client_event::<PlayerAttack>(ChannelKind::Unordered);
+        app.add_client_message::<MovePlayer>(Channel::Unordered);
+        app.add_client_message::<PlayerAttack>(Channel::Unordered);
     }
 }

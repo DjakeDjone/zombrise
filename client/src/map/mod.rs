@@ -62,6 +62,7 @@ fn apply_world_settings(commands: &mut Commands, config: SnowLandscapeConfig) {
     commands.insert_resource(AmbientLight {
         color: Color::srgb(0.95, 0.97, 1.0),
         brightness: config.ambient_brightness,
+        affects_lightmapped_meshes: false,
     });
 }
 
@@ -74,15 +75,14 @@ fn spawn_plateau(
 ) {
     commands
         .spawn((
-            PbrBundle {
-                mesh: meshes.add(Cylinder::new(config.radius, config.base_height)),
-                material: snow_material.clone(),
-                transform: Transform::from_xyz(0.0, -config.base_height * 0.5, 0.0),
-                ..default()
-            },
+            (
+                Mesh3d(meshes.add(Cylinder::new(config.radius, config.base_height))),
+                MeshMaterial3d(snow_material.clone()),
+                Transform::from_xyz(0.0, -config.base_height * 0.5, 0.0),
+            ),
             Name::new("Snow Plateau"),
         ))
-        .set_parent(parent);
+        .set_parent_in_place(parent);
 }
 
 fn spawn_frozen_pond(
@@ -99,17 +99,16 @@ fn spawn_frozen_pond(
 
     commands
         .spawn((
-            PbrBundle {
-                mesh: meshes.add(Cylinder::new(config.ice_radius, thickness)),
-                material: ice_material.clone(),
-                transform: Transform::from_xyz(
+            (
+                Mesh3d(meshes.add(Cylinder::new(config.ice_radius, thickness))),
+                MeshMaterial3d(ice_material.clone()),
+                Transform::from_xyz(
                     -config.radius * 0.28,
                     pond_center_y + 0.01,
                     config.radius * 0.16,
                 ),
-                ..default()
-            },
+            ),
             Name::new("Frozen Pond"),
         ))
-        .set_parent(parent);
+        .set_parent_in_place(parent);
 }

@@ -1,0 +1,855 @@
+warning: unused import: `bevy_replicon::prelude::ClientId`
+  --> shared/src/players/player.rs:15:5
+   |
+15 | use bevy_replicon::prelude::ClientId;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `zombrise_shared` (lib) generated 1 warning (run `cargo fix --lib -p zombrise_shared` to apply 1 suggestion)
+    Checking zombrise_server v0.1.0 (/home/benjamin-f/Documents/dev/game/dragon_queen_3d/server)
+    Checking zombrise_client v0.1.0 (/home/benjamin-f/Documents/dev/game/dragon_queen_3d/client)
+error[E0432]: unresolved import `bevy_replicon_renet::renet::transport`
+ --> server/src/main.rs:8:9
+  |
+8 |         transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig},
+  |         ^^^^^^^^^ could not find `transport` in `renet`
+
+error[E0432]: unresolved import `bevy_replicon_renet::renet::transport`
+ --> client/src/main.rs:7:9
+  |
+7 |         transport::{ClientAuthentication, NetcodeClientTransport},
+  |         ^^^^^^^^^ could not find `transport` in `renet`
+
+error[E0432]: unresolved import `bevy_simple_text_input`
+ --> client/src/startup_screen.rs:3:5
+  |
+3 | use bevy_simple_text_input::{
+  |     ^^^^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `bevy_simple_text_input`
+  |
+  = help: if you wanted to use a crate named `bevy_simple_text_input`, use `cargo add bevy_simple_text_input` to add it to your `Cargo.toml`
+
+error[E0412]: cannot find type `ServerEvent` in this scope
+   --> server/src/main.rs:133:79
+    |
+133 | fn server_event_system(mut commands: Commands, mut server_events: EventReader<ServerEvent>) {
+    |                                                                               ^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this enum
+    |
+  1 + use renet::ServerEvent;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `ServerEvent`
+   --> server/src/main.rs:136:13
+    |
+136 |             ServerEvent::ClientConnected { client_id } => {
+    |             ^^^^^^^^^^^ use of undeclared type `ServerEvent`
+    |
+help: consider importing this enum
+    |
+  1 + use renet::ServerEvent;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `ServerEvent`
+   --> server/src/main.rs:157:13
+    |
+157 |             ServerEvent::ClientDisconnected { client_id, reason } => {
+    |             ^^^^^^^^^^^ use of undeclared type `ServerEvent`
+    |
+help: consider importing this enum
+    |
+  1 + use renet::ServerEvent;
+    |
+
+error[E0423]: expected function, found module `rand::rng`
+   --> server/src/main.rs:211:23
+    |
+211 |         let mut rng = rand::rng();
+    |                       ^^^^^^^^^ not a function
+
+error[E0603]: module `rng` is private
+   --> server/src/main.rs:211:29
+    |
+211 |         let mut rng = rand::rng();
+    |                             ^^^ private module
+    |
+note: the module `rng` is defined here
+   --> /home/benjamin-f/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand-0.8.5/src/lib.rs:99:1
+    |
+ 99 | mod rng;
+    | ^^^^^^^
+
+warning: unused import: `RenetChannelsExt`
+  --> server/src/main.rs:11:5
+   |
+11 |     RenetChannelsExt, RepliconRenetPlugins,
+   |     ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `rand::Rng`
+  --> server/src/main.rs:13:5
+   |
+13 | use rand::Rng;
+   |     ^^^^^^^^^
+
+warning: use of deprecated type alias `bevy::prelude::EventReader`: Renamed to `MessageReader`.
+   --> server/src/main.rs:133:67
+    |
+133 | fn server_event_system(mut commands: Commands, mut server_events: EventReader<ServerEvent>) {
+    |                                                                   ^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated type alias `bevy::prelude::EventReader`: Renamed to `MessageReader`.
+   --> server/src/main.rs:165:17
+    |
+165 |     mut events: EventReader<FromClient<MovePlayer>>,
+    |                 ^^^^^^^^^^^
+
+warning: use of deprecated type alias `bevy::prelude::EventReader`: Renamed to `MessageReader`.
+   --> server/src/main.rs:324:17
+    |
+324 |     mut events: EventReader<FromClient<PlayerAttack>>,
+    |                 ^^^^^^^^^^^
+
+error[E0422]: cannot find struct, variant or union type `PbrBundle` in this scope
+  --> client/src/map/mod.rs:77:13
+   |
+77 |             PbrBundle {
+   |             ^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `PbrBundle` in this scope
+   --> client/src/map/mod.rs:102:13
+    |
+102 |             PbrBundle {
+    |             ^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `NodeBundle` in this scope
+  --> client/src/startup_screen.rs:40:13
+   |
+40 |             NodeBundle {
+   |             ^^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+  --> client/src/startup_screen.rs:41:24
+   |
+41 |                 style: Style {
+   |                        ^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `TextStyle` in this scope
+  --> client/src/startup_screen.rs:59:21
+   |
+59 |                     TextStyle {
+   |                     ^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+  --> client/src/startup_screen.rs:65:29
+   |
+65 |                 .with_style(Style {
+   |                             ^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `TextStyle` in this scope
+  --> client/src/startup_screen.rs:75:21
+   |
+75 |                     TextStyle {
+   |                     ^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+  --> client/src/startup_screen.rs:81:29
+   |
+81 |                 .with_style(Style {
+   |                             ^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `NodeBundle` in this scope
+  --> client/src/startup_screen.rs:89:17
+   |
+89 |                 NodeBundle {
+   |                 ^^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+  --> client/src/startup_screen.rs:90:28
+   |
+90 |                     style: Style {
+   |                            ^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `TextStyle` in this scope
+   --> client/src/startup_screen.rs:104:52
+    |
+104 |                     text_style: TextInputTextStyle(TextStyle {
+    |                                                    ^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `ButtonBundle` in this scope
+   --> client/src/startup_screen.rs:122:21
+    |
+122 |                     ButtonBundle {
+    |                     ^^^^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+   --> client/src/startup_screen.rs:123:32
+    |
+123 |                         style: Style {
+    |                                ^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `TextStyle` in this scope
+   --> client/src/startup_screen.rs:138:25
+    |
+138 |                         TextStyle {
+    |                         ^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `NodeBundle` in this scope
+  --> client/src/death_screen.rs:56:17
+   |
+56 |                 NodeBundle {
+   |                 ^^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+  --> client/src/death_screen.rs:57:28
+   |
+57 |                     style: Style {
+   |                            ^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `NodeBundle` in this scope
+  --> client/src/death_screen.rs:75:28
+   |
+75 |                     .spawn(NodeBundle {
+   |                            ^^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+  --> client/src/death_screen.rs:76:32
+   |
+76 |                         style: Style {
+   |                                ^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `TextStyle` in this scope
+  --> client/src/death_screen.rs:85:29
+   |
+85 | ...                   TextStyle {
+   |                       ^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `TextStyle` in this scope
+  --> client/src/death_screen.rs:97:25
+   |
+97 |                         TextStyle {
+   |                         ^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+   --> client/src/death_screen.rs:103:33
+    |
+103 |                     .with_style(Style {
+    |                                 ^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `TextStyle` in this scope
+   --> client/src/death_screen.rs:113:25
+    |
+113 |                         TextStyle {
+    |                         ^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+   --> client/src/death_screen.rs:119:33
+    |
+119 |                     .with_style(Style {
+    |                                 ^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Camera3dBundle` in this scope
+   --> client/src/main.rs:141:9
+    |
+141 |         Camera3dBundle {
+    |         ^^^^^^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `PointLightBundle` in this scope
+   --> client/src/main.rs:151:20
+    |
+151 |     commands.spawn(PointLightBundle {
+    |                    ^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `DirectionalLightBundle` in this scope
+   --> client/src/main.rs:161:20
+    |
+161 |     commands.spawn(DirectionalLightBundle {
+    |                    ^^^^^^^^^^^^^^^^^^^^^^ help: a struct with a similar name exists: `DirectionalLight`
+    |
+   ::: /home/benjamin-f/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_light-0.17.3/src/directional_light.rs:70:1
+    |
+ 70 | pub struct DirectionalLight {
+    | --------------------------- similarly named struct `DirectionalLight` defined here
+
+error[E0422]: cannot find struct, variant or union type `PbrBundle` in this scope
+   --> client/src/main.rs:221:21
+    |
+221 |             .insert(PbrBundle {
+    |                     ^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `PbrBundle` in this scope
+   --> client/src/main.rs:233:21
+    |
+233 |                     PbrBundle {
+    |                     ^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `PbrBundle` in this scope
+   --> client/src/main.rs:247:21
+    |
+247 |                     PbrBundle {
+    |                     ^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `PbrBundle` in this scope
+   --> client/src/main.rs:266:40
+    |
+266 |         commands.entity(entity).insert(PbrBundle {
+    |                                        ^^^^^^^^^ not found in this scope
+
+error[E0412]: cannot find type `Style` in this scope
+   --> client/src/main.rs:394:15
+    |
+394 |         (&mut Style, &mut BackgroundColor),
+    |               ^^^^^ not found in this scope
+    |
+help: you might be missing a type parameter
+    |
+388 | fn display_health_bar<Style>(
+    |                      +++++++
+
+error[E0422]: cannot find struct, variant or union type `NodeBundle` in this scope
+   --> client/src/main.rs:413:17
+    |
+413 |                 NodeBundle {
+    |                 ^^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+   --> client/src/main.rs:414:28
+    |
+414 |                     style: Style {
+    |                            ^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+   --> client/src/main.rs:436:21
+    |
+436 |                     Style {
+    |                     ^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `NodeBundle` in this scope
+   --> client/src/main.rs:445:28
+    |
+445 |                     .spawn(NodeBundle {
+    |                            ^^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+   --> client/src/main.rs:446:32
+    |
+446 |                         style: Style {
+    |                                ^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `NodeBundle` in this scope
+   --> client/src/main.rs:459:29
+    |
+459 | ...                   NodeBundle {
+    |                       ^^^^^^^^^^ not found in this scope
+
+error[E0422]: cannot find struct, variant or union type `Style` in this scope
+   --> client/src/main.rs:460:40
+    |
+460 | ...                   style: Style {
+    |                              ^^^^^ not found in this scope
+
+warning: unused import: `ZombieAnimations`
+  --> client/src/main.rs:18:37
+   |
+18 |     setup_zombie_animation, Zombie, ZombieAnimations,
+   |                                     ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: use of deprecated type alias `bevy::prelude::EventReader`: Renamed to `MessageReader`.
+   --> client/src/main.rs:317:23
+    |
+317 |     mut mouse_motion: EventReader<MouseMotion>,
+    |                       ^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated type alias `bevy::prelude::EventReader`: Renamed to `MessageReader`.
+   --> client/src/startup_screen.rs:165:24
+    |
+165 |     mut submit_events: EventReader<TextInputSubmitEvent>,
+    |                        ^^^^^^^^^^^
+
+warning: use of deprecated type alias `bevy::prelude::EventReader`: Renamed to `MessageReader`.
+   --> client/src/startup_screen.rs:199:18
+    |
+199 |     mut evr_kbd: EventReader<KeyboardInput>,
+    |                  ^^^^^^^^^^^
+
+error[E0599]: no method named `get_server_configs` found for struct `bevy::prelude::Res<'_, bevy_replicon::prelude::RepliconChannels>` in the current scope
+  --> server/src/main.rs:73:51
+   |
+73 |     let server_channels_config = network_channels.get_server_configs();
+   |                                                   ^^^^^^^^^^^^^^^^^^
+   |
+help: there is a method `server_configs` with a similar name
+   |
+73 -     let server_channels_config = network_channels.get_server_configs();
+73 +     let server_channels_config = network_channels.server_configs();
+   |
+
+error[E0599]: no method named `get_client_configs` found for struct `bevy::prelude::Res<'_, bevy_replicon::prelude::RepliconChannels>` in the current scope
+  --> server/src/main.rs:74:51
+   |
+74 |     let client_channels_config = network_channels.get_client_configs();
+   |                                                   ^^^^^^^^^^^^^^^^^^
+   |
+help: there is a method `client_configs` with a similar name
+   |
+74 -     let client_channels_config = network_channels.get_client_configs();
+74 +     let client_channels_config = network_channels.client_configs();
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `SpatialBundle`
+   --> server/src/main.rs:106:9
+    |
+106 |         SpatialBundle::from_transform(Transform::from_xyz(0.0, -0.55, 0.0)),
+    |         ^^^^^^^^^^^^^ use of undeclared type `SpatialBundle`
+
+error[E0063]: missing field `affects_lightmapped_meshes` in initializer of `bevy::prelude::AmbientLight`
+  --> client/src/map/mod.rs:62:30
+   |
+62 |     commands.insert_resource(AmbientLight {
+   |                              ^^^^^^^^^^^^ missing `affects_lightmapped_meshes`
+
+error[E0026]: struct `bevy_replicon::prelude::FromClient` does not have a field named `event`
+   --> server/src/main.rs:169:33
+    |
+169 |     for FromClient { client_id, event } in events.read() {
+    |                                 ^^^^^
+    |                                 |
+    |                                 struct `bevy_replicon::prelude::FromClient` does not have this field
+    |                                 help: `bevy_replicon::prelude::FromClient` has a field named `message`
+
+error[E0027]: pattern does not mention field `message`
+   --> server/src/main.rs:169:9
+    |
+169 |     for FromClient { client_id, event } in events.read() {
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing field `message`
+    |
+help: include the missing field in the pattern
+    |
+169 |     for FromClient { client_id, event, message } in events.read() {
+    |                                      +++++++++
+help: if you don't care about this missing field, you can explicitly ignore it
+    |
+169 |     for FromClient { client_id, event, message: _ } in events.read() {
+    |                                      ++++++++++++
+help: or always ignore missing fields here
+    |
+169 |     for FromClient { client_id, event, .. } in events.read() {
+    |                                      ++++
+
+error[E0599]: no method named `set_parent` found for struct `EntityCommands<'a>` in the current scope
+  --> client/src/map/mod.rs:85:10
+   |
+75 | /     commands
+76 | |         .spawn((
+77 | |             PbrBundle {
+78 | |                 mesh: meshes.add(Cylinder::new(config.radius, config.base_height)),
+...  |
+84 | |         ))
+85 | |         .set_parent(parent);
+   | |_________-^^^^^^^^^^
+   |
+help: there is a method `set_parent_in_place` with a similar name
+   |
+85 |         .set_parent_in_place(parent);
+   |                    +++++++++
+
+error[E0277]: can't compare `u64` with `ClientId`
+   --> server/src/main.rs:171:24
+    |
+171 |             if owner.0 == *client_id {
+    |                        ^^ no implementation for `u64 == ClientId`
+    |
+    = help: the trait `PartialEq<ClientId>` is not implemented for `u64`
+    = help: the following other types implement trait `PartialEq<Rhs>`:
+              `u64` implements `PartialEq<serde_json::value::Value>`
+              `u64` implements `PartialEq`
+
+error[E0599]: no method named `set_parent` found for struct `EntityCommands<'a>` in the current scope
+   --> client/src/map/mod.rs:114:10
+    |
+100 | /     commands
+101 | |         .spawn((
+102 | |             PbrBundle {
+103 | |                 mesh: meshes.add(Cylinder::new(config.ice_radius, thickness)),
+...   |
+113 | |         ))
+114 | |         .set_parent(parent);
+    | |_________-^^^^^^^^^^
+    |
+help: there is a method `set_parent_in_place` with a similar name
+    |
+114 |         .set_parent_in_place(parent);
+    |                    +++++++++
+
+error[E0061]: this function takes 1 argument but 2 arguments were supplied
+   --> client/src/startup_screen.rs:57:17
+    |
+ 57 |                   Text::new(
+    |                   ^^^^^^^^^
+ 58 |                       "Zombrise 3D",
+ 59 | /                     TextStyle {
+ 60 | |                         font_size: 60.0,
+ 61 | |                         color: Color::srgb(0.9, 0.8, 0.3),
+ 62 | |                         ..default()
+ 63 | |                     },
+    | |_____________________- unexpected argument #2
+    |
+note: associated function defined here
+   --> /home/benjamin-f/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_ui-0.17.3/src/widget/text.rs:103:12
+    |
+103 |     pub fn new(text: impl Into<String>) -> Self {
+    |            ^^^
+help: remove the extra argument
+    |
+ 58 -                     "Zombrise 3D",
+ 59 -                     TextStyle {
+ 60 -                         font_size: 60.0,
+ 61 -                         color: Color::srgb(0.9, 0.8, 0.3),
+ 62 -                         ..default()
+ 63 -                     },
+ 58 +                     "Zombrise 3D",
+    |
+
+error[E0599]: no method named `delta_seconds` found for struct `bevy::prelude::Res<'_, bevy::prelude::Time>` in the current scope
+   --> server/src/main.rs:311:55
+    |
+311 |                 let damage = DAMAGE_PER_SECOND * time.delta_seconds();
+    |                                                       ^^^^^^^^^^^^^
+    |
+help: there is a method `delta_secs` with a similar name
+    |
+311 -                 let damage = DAMAGE_PER_SECOND * time.delta_seconds();
+311 +                 let damage = DAMAGE_PER_SECOND * time.delta_secs();
+    |
+
+error[E0277]: can't compare `u64` with `ClientId`
+   --> server/src/main.rs:338:24
+    |
+338 |             if owner.0 == *client_id {
+    |                        ^^ no implementation for `u64 == ClientId`
+    |
+    = help: the trait `PartialEq<ClientId>` is not implemented for `u64`
+    = help: the following other types implement trait `PartialEq<Rhs>`:
+              `u64` implements `PartialEq<serde_json::value::Value>`
+              `u64` implements `PartialEq`
+
+error[E0599]: no method named `with_style` found for struct `bevy::prelude::Text` in the current scope
+  --> client/src/startup_screen.rs:65:18
+   |
+57 | /                 Text::new(
+58 | |                     "Zombrise 3D",
+59 | |                     TextStyle {
+60 | |                         font_size: 60.0,
+...  |
+65 | |                 .with_style(Style {
+   | |                 -^^^^^^^^^^ method not found in `bevy::prelude::Text`
+   | |_________________|
+   |
+
+error[E0061]: this function takes 1 argument but 2 arguments were supplied
+   --> client/src/startup_screen.rs:73:17
+    |
+ 73 |                   Text::new(
+    |                   ^^^^^^^^^
+ 74 |                       "Server Address:",
+ 75 | /                     TextStyle {
+ 76 | |                         font_size: 24.0,
+ 77 | |                         color: Color::srgb(0.9, 0.9, 0.9),
+ 78 | |                         ..default()
+ 79 | |                     },
+    | |_____________________- unexpected argument #2
+    |
+note: associated function defined here
+   --> /home/benjamin-f/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_ui-0.17.3/src/widget/text.rs:103:12
+    |
+103 |     pub fn new(text: impl Into<String>) -> Self {
+    |            ^^^
+help: remove the extra argument
+    |
+ 74 -                     "Server Address:",
+ 75 -                     TextStyle {
+ 76 -                         font_size: 24.0,
+ 77 -                         color: Color::srgb(0.9, 0.9, 0.9),
+ 78 -                         ..default()
+ 79 -                     },
+ 74 +                     "Server Address:",
+    |
+
+error[E0599]: no method named `delta_seconds` found for struct `bevy::prelude::Res<'_, bevy::prelude::Time>` in the current scope
+   --> server/src/main.rs:375:40
+    |
+375 |             damage_flash.timer -= time.delta_seconds();
+    |                                        ^^^^^^^^^^^^^
+    |
+help: there is a method `delta_secs` with a similar name
+    |
+375 -             damage_flash.timer -= time.delta_seconds();
+375 +             damage_flash.timer -= time.delta_secs();
+    |
+
+error[E0599]: no method named `with_style` found for struct `bevy::prelude::Text` in the current scope
+  --> client/src/startup_screen.rs:81:18
+   |
+73 | /                 Text::new(
+74 | |                     "Server Address:",
+75 | |                     TextStyle {
+76 | |                         font_size: 24.0,
+...  |
+81 | |                 .with_style(Style {
+   | |                 -^^^^^^^^^^ method not found in `bevy::prelude::Text`
+   | |_________________|
+   |
+
+error[E0061]: this function takes 1 argument but 2 arguments were supplied
+   --> client/src/startup_screen.rs:136:41
+    |
+136 |                       button_parent.spawn(Text::new(
+    |                                           ^^^^^^^^^
+137 |                           "Connect",
+138 | /                         TextStyle {
+139 | |                             font_size: 30.0,
+140 | |                             color: Color::srgb(1.0, 1.0, 1.0),
+141 | |                             ..default()
+142 | |                         },
+    | |_________________________- unexpected argument #2
+    |
+note: associated function defined here
+   --> /home/benjamin-f/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_ui-0.17.3/src/widget/text.rs:103:12
+    |
+103 |     pub fn new(text: impl Into<String>) -> Self {
+    |            ^^^
+help: remove the extra argument
+    |
+137 -                         "Connect",
+138 -                         TextStyle {
+139 -                             font_size: 30.0,
+140 -                             color: Color::srgb(1.0, 1.0, 1.0),
+141 -                             ..default()
+142 -                         },
+137 +                         "Connect",
+    |
+
+error[E0599]: no method named `despawn_recursive` found for struct `EntityCommands<'a>` in the current scope
+   --> server/src/main.rs:390:37
+    |
+390 |             commands.entity(entity).despawn_recursive();
+    |                                     ^^^^^^^^^^^^^^^^^ method not found in `EntityCommands<'_>`
+
+error[E0599]: no method named `despawn_recursive` found for struct `EntityCommands<'a>` in the current scope
+   --> client/src/startup_screen.rs:153:33
+    |
+153 |         commands.entity(entity).despawn_recursive();
+    |                                 ^^^^^^^^^^^^^^^^^ method not found in `EntityCommands<'_>`
+
+Some errors have detailed explanations: E0026, E0027, E0277, E0412, E0423, E0432, E0433, E0599, E0603.
+For more information about an error, try `rustc --explain E0026`.
+warning: `zombrise_server` (bin "zombrise_server") generated 5 warnings
+error: could not compile `zombrise_server` (bin "zombrise_server") due to 16 previous errors; 5 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+error[E0609]: no field `cursor_options` on type `Mut<'_, bevy::prelude::Window>`
+  --> client/src/death_screen.rs:49:20
+   |
+49 |             window.cursor_options.grab_mode = CursorGrabMode::None;
+   |                    ^^^^^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `present_mode`, `mode`, `position`, `resolution`, `title` ... and 34 others
+
+error[E0609]: no field `cursor_options` on type `Mut<'_, bevy::prelude::Window>`
+  --> client/src/death_screen.rs:50:20
+   |
+50 |             window.cursor_options.visible = true;
+   |                    ^^^^^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `present_mode`, `mode`, `position`, `resolution`, `title` ... and 34 others
+
+error[E0599]: no associated item named `Global` found for struct `bevy::prelude::ZIndex` in the current scope
+  --> client/src/death_screen.rs:67:38
+   |
+67 |                     z_index: ZIndex::Global(1000),
+   |                                      ^^^^^^ associated item not found in `bevy::prelude::ZIndex`
+
+error[E0061]: this function takes 1 argument but 2 arguments were supplied
+   --> client/src/death_screen.rs:83:38
+    |
+ 83 |                           parent.spawn(Text::new(
+    |                                        ^^^^^^^^^
+ 84 |                               "YOU DIED",
+ 85 | /                             TextStyle {
+ 86 | |                                 font_size: 100.0,
+ 87 | |                                 color: Color::srgb(0.9, 0.1, 0.1),
+ 88 | |                                 ..default()
+ 89 | |                             },
+    | |_____________________________- unexpected argument #2
+    |
+note: associated function defined here
+   --> /home/benjamin-f/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_ui-0.17.3/src/widget/text.rs:103:12
+    |
+103 |     pub fn new(text: impl Into<String>) -> Self {
+    |            ^^^
+help: remove the extra argument
+    |
+ 84 -                             "YOU DIED",
+ 85 -                             TextStyle {
+ 86 -                                 font_size: 100.0,
+ 87 -                                 color: Color::srgb(0.9, 0.1, 0.1),
+ 88 -                                 ..default()
+ 89 -                             },
+ 84 +                             "YOU DIED",
+    |
+
+error[E0061]: this function takes 1 argument but 2 arguments were supplied
+   --> client/src/death_screen.rs:95:21
+    |
+ 95 |                       Text::new(
+    |                       ^^^^^^^^^
+ 96 |                           "The zombies got you...",
+ 97 | /                         TextStyle {
+ 98 | |                             font_size: 32.0,
+ 99 | |                             color: Color::srgb(0.85, 0.85, 0.85),
+100 | |                             ..default()
+101 | |                         },
+    | |_________________________- unexpected argument #2
+    |
+note: associated function defined here
+   --> /home/benjamin-f/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_ui-0.17.3/src/widget/text.rs:103:12
+    |
+103 |     pub fn new(text: impl Into<String>) -> Self {
+    |            ^^^
+help: remove the extra argument
+    |
+ 96 -                         "The zombies got you...",
+ 97 -                         TextStyle {
+ 98 -                             font_size: 32.0,
+ 99 -                             color: Color::srgb(0.85, 0.85, 0.85),
+100 -                             ..default()
+101 -                         },
+ 96 +                         "The zombies got you...",
+    |
+
+error[E0599]: no method named `with_style` found for struct `bevy::prelude::Text` in the current scope
+   --> client/src/death_screen.rs:103:22
+    |
+ 95 | /                     Text::new(
+ 96 | |                         "The zombies got you...",
+ 97 | |                         TextStyle {
+ 98 | |                             font_size: 32.0,
+...   |
+103 | |                     .with_style(Style {
+    | |                     -^^^^^^^^^^ method not found in `bevy::prelude::Text`
+    | |_____________________|
+    |
+
+error[E0061]: this function takes 1 argument but 2 arguments were supplied
+   --> client/src/death_screen.rs:111:21
+    |
+111 |                       Text::new(
+    |                       ^^^^^^^^^
+112 |                           "Press ESC to return to menu",
+113 | /                         TextStyle {
+114 | |                             font_size: 24.0,
+115 | |                             color: Color::srgb(0.6, 0.6, 0.6),
+116 | |                             ..default()
+117 | |                         },
+    | |_________________________- unexpected argument #2
+    |
+note: associated function defined here
+   --> /home/benjamin-f/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_ui-0.17.3/src/widget/text.rs:103:12
+    |
+103 |     pub fn new(text: impl Into<String>) -> Self {
+    |            ^^^
+help: remove the extra argument
+    |
+112 -                         "Press ESC to return to menu",
+113 -                         TextStyle {
+114 -                             font_size: 24.0,
+115 -                             color: Color::srgb(0.6, 0.6, 0.6),
+116 -                             ..default()
+117 -                         },
+112 +                         "Press ESC to return to menu",
+    |
+
+error[E0599]: no method named `with_style` found for struct `bevy::prelude::Text` in the current scope
+   --> client/src/death_screen.rs:119:22
+    |
+111 | /                     Text::new(
+112 | |                         "Press ESC to return to menu",
+113 | |                         TextStyle {
+114 | |                             font_size: 24.0,
+...   |
+119 | |                     .with_style(Style {
+    | |                     -^^^^^^^^^^ method not found in `bevy::prelude::Text`
+    | |_____________________|
+    |
+
+error[E0599]: no method named `despawn_descendants` found for struct `EntityCommands<'a>` in the current scope
+   --> client/src/death_screen.rs:128:37
+    |
+128 |             commands.entity(entity).despawn_descendants();
+    |                                     ^^^^^^^^^^^^^^^^^^^ method not found in `EntityCommands<'_>`
+
+error[E0609]: no field `cursor_options` on type `Mut<'_, bevy::prelude::Window>`
+   --> client/src/death_screen.rs:133:20
+    |
+133 |             window.cursor_options.grab_mode = CursorGrabMode::Locked;
+    |                    ^^^^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `present_mode`, `mode`, `position`, `resolution`, `title` ... and 34 others
+
+error[E0609]: no field `cursor_options` on type `Mut<'_, bevy::prelude::Window>`
+   --> client/src/death_screen.rs:134:20
+    |
+134 |             window.cursor_options.visible = false;
+    |                    ^^^^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `present_mode`, `mode`, `position`, `resolution`, `title` ... and 34 others
+
+error[E0599]: no method named `despawn_descendants` found for struct `EntityCommands<'a>` in the current scope
+   --> client/src/death_screen.rs:150:37
+    |
+150 |             commands.entity(entity).despawn_descendants();
+    |                                     ^^^^^^^^^^^^^^^^^^^ method not found in `EntityCommands<'_>`
+
+error[E0609]: no field `cursor_options` on type `Mut<'_, bevy::prelude::Window>`
+   --> client/src/main.rs:332:16
+    |
+332 |         window.cursor_options.grab_mode = CursorGrabMode::Locked;
+    |                ^^^^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `present_mode`, `mode`, `position`, `resolution`, `title` ... and 34 others
+
+error[E0609]: no field `cursor_options` on type `Mut<'_, bevy::prelude::Window>`
+   --> client/src/main.rs:333:16
+    |
+333 |         window.cursor_options.visible = false;
+    |                ^^^^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `present_mode`, `mode`, `position`, `resolution`, `title` ... and 34 others
+
+error[E0609]: no field `cursor_options` on type `Mut<'_, bevy::prelude::Window>`
+   --> client/src/main.rs:343:20
+    |
+343 |             window.cursor_options.grab_mode = CursorGrabMode::None;
+    |                    ^^^^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `present_mode`, `mode`, `position`, `resolution`, `title` ... and 34 others
+
+error[E0609]: no field `cursor_options` on type `Mut<'_, bevy::prelude::Window>`
+   --> client/src/main.rs:344:20
+    |
+344 |             window.cursor_options.visible = true;
+    |                    ^^^^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `present_mode`, `mode`, `position`, `resolution`, `title` ... and 34 others
+
+Some errors have detailed explanations: E0061, E0063, E0412, E0422, E0432, E0599, E0609.
+For more information about an error, try `rustc --explain E0061`.
+warning: `zombrise_client` (bin "zombrise_client") generated 4 warnings
+error: could not compile `zombrise_client` (bin "zombrise_client") due to 65 previous errors; 4 warnings emitted

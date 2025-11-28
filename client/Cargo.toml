@@ -5,8 +5,11 @@ edition = "2021"
 
 [dependencies]
 zombrise_shared = { path = "../shared", features = ["client"] }
-bevy = { version = "0.14", default-features = false, features = ["bevy_asset", "bevy_scene", "bevy_gltf", "serialize", "animation", "bevy_ui", "bevy_winit", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "bevy_text", "bevy_sprite", "png", "jpeg", "tonemapping_luts", "default_font", "x11", "wayland", "bevy_state"] }
-bevy_replicon = "0.28"
-bevy_replicon_renet = "0.5"
-bevy_simple_text_input = "0.9"
-arboard = "3.4"
+# Client gets all default Bevy features for full functionality
+bevy = "0.17.3"
+bevy_replicon = "0.36.1"
+bevy_replicon_renet = "0.12"
+renet = "1.2.0"
+renet_netcode = "1.2.0"
+# bevy_simple_text_input = "0.9"  # TODO: Find Bevy 0.17 compatible version
+arboard = "3.6.1"

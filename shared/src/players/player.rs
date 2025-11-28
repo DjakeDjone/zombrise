@@ -1,7 +1,7 @@
 use bevy::{
     ecs::{
         component::Component,
-        event::{Event, EventWriter},
+        message::{Message, MessageWriter},
         query::{With, Without},
         system::{Query, Res},
     },
@@ -39,23 +39,23 @@ pub struct DamageFlash {
 }
 
 #[derive(Component, Serialize, Deserialize, Reflect)]
-pub struct PlayerOwner(pub ClientId);
+pub struct PlayerOwner(pub u64);
 
 #[derive(Component)]
 pub struct MainCamera;
 
-#[derive(Event, Serialize, Deserialize)]
+#[derive(Message, Serialize, Deserialize)]
 pub struct MovePlayer {
     pub direction: Vec3,
     pub camera_yaw: f32,
 }
 
-#[derive(Event, Serialize, Deserialize)]
+#[derive(Message, Serialize, Deserialize)]
 pub struct PlayerAttack;
 
-#[derive(Event, Serialize, Deserialize)]
+#[derive(Message, Serialize, Deserialize)]
 pub struct DamagePlayer {
-    pub client_id: ClientId,
+    pub client_id: u64,
     pub amount: f32,
 }
 
@@ -63,8 +63,8 @@ pub struct DamagePlayer {
 #[cfg(feature = "client")]
 pub fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut move_events: EventWriter<MovePlayer>,
-    mut attack_events: EventWriter<PlayerAttack>,
+    mut move_events: MessageWriter<MovePlayer>,
+    mut attack_events: MessageWriter<PlayerAttack>,
     camera_rotation: Option<Res<CameraRotation>>,
 ) {
     let mut direction = Vec3::ZERO;
@@ -85,14 +85,14 @@ pub fn handle_input(
     if direction.length() > 0.0 {
         direction = direction.normalize();
         let camera_yaw = camera_rotation.map(|r| r.yaw).unwrap_or(0.0);
-        move_events.send(MovePlayer {
+        move_events.write(MovePlayer {
             direction,
             camera_yaw,
         });
     }
 
     if keyboard_input.just_pressed(KeyCode::Space) {
-        attack_events.send(PlayerAttack);
+        attack_events.write(PlayerAttack);
     }
 }
 
@@ -106,8 +106,8 @@ pub fn camera_follow(
     player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
     mut camera_query: Query<&mut Transform, With<MainCamera>>,
 ) {
-    if let Ok(player_transform) = player_query.get_single() {
-        if let Ok(mut camera_transform) = camera_query.get_single_mut() {
+    if let Ok(player_transform) = player_query.single() {
+        if let Ok(mut camera_transform) = camera_query.single_mut() {
             let offset = Vec3::new(0.0, 5.0, 10.0);
             camera_transform.translation = player_transform.translation + offset;
             camera_transform.look_at(player_transform.translation, Vec3::Y);

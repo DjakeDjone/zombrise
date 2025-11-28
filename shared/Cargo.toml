@@ -5,27 +5,35 @@ edition = "2021"
 
 [dependencies]
 # Minimal features for both client and server
-bevy = { version = "0.14", default-features = false, features = ["serialize", "bevy_state"] }
-bevy_replicon = "0.28"
-bevy_replicon_renet = "0.5"
-bevy_rapier3d = { version = "0.27", default-features = false, features = ["dim3", "simd-stable"] }
+bevy = { version = "0.17.3", default-features = false, features = [
+    "serialize",
+    "bevy_state",
+] }
+bevy_replicon = "0.36.1"
+bevy_replicon_renet = "0.12"
+bevy_rapier3d = { git = "https://github.com/lukasfri/bevy_rapier", rev = "a5c82f08c86f9fd44430081e7d6ea1a5bb296e8b", default-features = false, features = [
+    "dim3",
+    "simd-stable",
+] }
+renet = "1.2.0"
+renet_netcode = "1.2.0"
 serde = { version = "1.0", features = ["derive"] }
-rand = "0.9.2"
+rand = "0.8"
 
 # Optional: only needed for client
-bevy_input = { version = "0.14", optional = true }
+bevy_input = { version = "0.17.3", optional = true }
 
 [features]
 default = []
 # Client feature includes all graphics dependencies
 client = [
     "bevy/bevy_asset",
-    "bevy/bevy_scene", 
+    "bevy/bevy_scene",
     "bevy/bevy_gltf",
     "bevy/animation",
     "bevy/bevy_pbr",
     "bevy/bevy_render",
     "bevy/bevy_core_pipeline",
     "bevy_input",
-    "bevy_rapier3d/debug-render-3d"
+    "bevy_rapier3d/debug-render-3d",
 ]

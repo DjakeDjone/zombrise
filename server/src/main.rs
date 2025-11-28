@@ -4,12 +4,10 @@ use bevy::app::ScheduleRunnerPlugin;
 use bevy_rapier3d::prelude::*;
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet::{
-    renet::{
-        transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig},
-        ConnectionConfig, RenetServer,
-    },
+    renet::{ConnectionConfig, RenetServer},
     RenetChannelsExt, RepliconRenetPlugins,
 };
+use renet_netcode::{NetcodeServerTransport, ServerAuthentication, ServerConfig};
 use rand::Rng;
 use std::{
     net::UdpSocket,
@@ -25,20 +23,13 @@ struct ZombieSpawnTimer(Timer);
 fn main() {
     App::new()
         .add_plugins(
-            DefaultPlugins
-                .build()
-                .disable::<bevy::render::RenderPlugin>()
-                .disable::<bevy::core_pipeline::CorePipelinePlugin>()
-                .disable::<bevy::sprite::SpritePlugin>()
-                .disable::<bevy::pbr::PbrPlugin>()
-                .disable::<bevy::ui::UiPlugin>()
-                .disable::<bevy::text::TextPlugin>()
-                .disable::<bevy::gizmos::GizmoPlugin>()
-                .disable::<bevy::gltf::GltfPlugin>(),
+            MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
+                1.0 / 60.0,
+            ))),
         )
-        .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
-            1.0 / 60.0,
-        )))
+        .add_plugins(bevy::asset::AssetPlugin::default())
+        .add_plugins(bevy::scene::ScenePlugin)
+        .add_plugins(bevy::state::app::StatesPlugin)
         .init_asset::<Mesh>()
         .init_asset::<Scene>()
         .add_plugins(RepliconPlugins)
@@ -70,8 +61,8 @@ fn main() {
 }
 
 fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>) {
-    let server_channels_config = network_channels.get_server_configs();
-    let client_channels_config = network_channels.get_client_configs();
+    let server_channels_config = network_channels.server_configs();
+    let client_channels_config = network_channels.client_configs();
 
     let server = RenetServer::new(ConnectionConfig {
         server_channels_config,
@@ -103,7 +94,8 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     commands.spawn((
         MapMarker,
         Replicated,
-        SpatialBundle::from_transform(Transform::from_xyz(0.0, -0.55, 0.0)),
+        Transform::from_xyz(0.0, -0.55, 0.0),
+        GlobalTransform::default(),
         Collider::cuboid(28.0, 0.05, 28.0), // Flat ground: 56x0.1x56 units
     ));
 
@@ -130,10 +122,13 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     println!("Server started on {}", public_addr);
 }
 
-fn server_event_system(mut commands: Commands, mut server_events: EventReader<ServerEvent>) {
+fn server_event_system(
+    mut commands: Commands,
+    mut server_events: MessageReader<renet::ServerEvent>,
+) {
     for event in server_events.read() {
         match event {
-            ServerEvent::ClientConnected { client_id } => {
+            renet::ServerEvent::ClientConnected { client_id } => {
                 println!("Client {:?} connected", client_id);
                 // Spawn player for client
                 commands.spawn((
@@ -154,7 +149,7 @@ fn server_event_system(mut commands: Commands, mut server_events: EventReader<Se
                     },
                 ));
             }
-            ServerEvent::ClientDisconnected { client_id, reason } => {
+            renet::ServerEvent::ClientDisconnected { client_id, reason } => {
                 println!("Client {:?} disconnected: {:?}", client_id, reason);
             }
         }
@@ -162,13 +157,15 @@ fn server_event_system(mut commands: Commands, mut server_events: EventReader<Se
 }
 
 fn handle_move_player(
-    mut events: EventReader<FromClient<MovePlayer>>,
+    mut events: MessageReader<FromClient<MovePlayer>>,
     mut query: Query<(&PlayerOwner, &mut Velocity, &mut Transform)>,
 ) {
     let speed = 5.0;
-    for FromClient { client_id, event } in events.read() {
+    for FromClient { client_id, message: event } in events.read() {
         for (owner, mut velocity, mut transform) in &mut query {
-            if owner.0 == *client_id {
+            // SAFETY: ClientId is a wrapper around u64
+            let client_id_u64: u64 = unsafe { std::mem::transmute(*client_id) };
+            if owner.0 == client_id_u64 {
                 // Rotate the input direction by the camera yaw
                 let yaw_rotation = Quat::from_rotation_y(event.camera_yaw);
                 let rotated_direction = yaw_rotation * event.direction;
@@ -198,7 +195,7 @@ fn update_map_size(
     mut map_query: Query<&mut Transform, With<MapMarker>>,
 ) {
     let player_count = player_query.iter().count();
-    if let Ok(mut transform) = map_query.get_single_mut() {
+    if let Ok(mut transform) = map_query.single_mut() {
         let target_scale = 1.0 + (player_count as f32 * 0.2);
         if (transform.scale.x - target_scale).abs() > 0.01 {
             transform.scale = Vec3::splat(target_scale);
@@ -208,9 +205,9 @@ fn update_map_size(
 
 fn spawn_zombies(mut commands: Commands, time: Res<Time>, mut timer: ResMut<ZombieSpawnTimer>) {
     if timer.0.tick(time.delta()).just_finished() {
-        let mut rng = rand::rng();
-        let x = rng.random_range(-20.0..20.0);
-        let z = rng.random_range(-20.0..20.0);
+        let mut rng = rand::thread_rng();
+        let x = rng.gen_range(-20.0..20.0);
+        let z = rng.gen_range(-20.0..20.0);
 
         commands.spawn((
             Zombie,
@@ -308,7 +305,7 @@ fn zombie_collision_damage(
                 .distance(player_transform.translation);
 
             if distance < COLLISION_DISTANCE && health.current > 0.0 {
-                let damage = DAMAGE_PER_SECOND * time.delta_seconds();
+                let damage = DAMAGE_PER_SECOND * time.delta_secs();
                 health.current = (health.current - damage).max(0.0);
                 damage_flash.timer = 0.3; // Flash for 0.3 seconds
 
@@ -321,7 +318,7 @@ fn zombie_collision_damage(
 }
 
 fn handle_player_attack(
-    mut events: EventReader<FromClient<PlayerAttack>>,
+    mut events: MessageReader<FromClient<PlayerAttack>>,
     mut player_query: Query<(Entity, &PlayerOwner, &Transform, &mut Health, &mut DamageFlash), With<Player>>,
     mut zombie_query: Query<(Entity, &Transform), With<Zombie>>,
     mut commands: Commands,
@@ -335,7 +332,9 @@ fn handle_player_attack(
 
         // Find the attacking player
         for (entity, owner, transform, _, _) in &player_query {
-            if owner.0 == *client_id {
+            // SAFETY: ClientId is a wrapper around u64
+            let client_id_u64: u64 = unsafe { std::mem::transmute(*client_id) };
+            if owner.0 == client_id_u64 {
                 attacker_pos = Some(transform.translation);
                 attacker_entity = Some(entity);
                 break;
@@ -372,7 +371,7 @@ fn handle_player_attack(
 fn update_damage_flash(mut query: Query<&mut DamageFlash>, time: Res<Time>) {
     for mut damage_flash in &mut query {
         if damage_flash.timer > 0.0 {
-            damage_flash.timer -= time.delta_seconds();
+            damage_flash.timer -= time.delta_secs();
             if damage_flash.timer < 0.0 {
                 damage_flash.timer = 0.0;
             }
@@ -387,7 +386,7 @@ fn remove_dead_players(
     for (entity, health, owner) in &player_query {
         if health.current <= 0.0 {
             println!("Removing dead player (Client ID: {:?})", owner.0);
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).despawn();
         }
     }
 }
