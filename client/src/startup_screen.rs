@@ -1,6 +1,6 @@
 use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
-use bevy_replicon::prelude::*;
+use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};
 // use bevy_simple_text_input::{
 //     TextInputBundle, TextInputSettings, TextInputSubmitEvent, TextInputTextStyle, TextInputValue,
 // };
@@ -8,8 +8,8 @@ use bevy_replicon::prelude::*;
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum AppState {
     #[default]
-    StartupScreen,
     Playing,
+    StartupScreen,
 }
 
 #[derive(Resource)]
@@ -30,13 +30,25 @@ impl Default for ServerConfig {
 pub struct StartupScreenMarker;
 
 #[derive(Component)]
+#[allow(dead_code)]
 pub(crate) struct ServerUrlInput;
 
 #[derive(Component)]
 pub(crate) struct ConnectButton;
 
-pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConfig>) {
+pub fn show_startup_screen(
+    mut commands: Commands,
+    server_config: Res<ServerConfig>,
+    mut cursor_options: Query<&mut CursorOptions, With<PrimaryWindow>>,
+) {
     println!("Render startup screen");
+
+    // Unlock cursor and make it visible
+    if let Ok(mut options) = cursor_options.single_mut() {
+        options.grab_mode = CursorGrabMode::None;
+        options.visible = true;
+    }
+
     // spawn camera
     // commands.spawn(Camera2d);
 
@@ -192,7 +204,7 @@ pub fn handle_startup_ui(
         (Changed<Interaction>, With<ConnectButton>),
     >,
     mut next_state: ResMut<NextState<AppState>>,
-    mut server_config: ResMut<ServerConfig>,
+    mut _server_config: ResMut<ServerConfig>,
     // input_query: Query<&TextInputValue, With<ServerUrlInput>>,
     // mut submit_events: EventReader<TextInputSubmitEvent>,
 ) {
@@ -274,8 +286,8 @@ pub fn handle_startup_ui(
 
 pub fn handle_copy_paste(
     // mut input_query: Query<&mut TextInputValue, With<ServerUrlInput>>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut evr_kbd: MessageReader<KeyboardInput>,
+    _keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut _evr_kbd: MessageReader<KeyboardInput>,
 ) {
     // TODO: Re-enable when bevy_simple_text_input is compatible with Bevy 0.17
     // Check if Ctrl (or Cmd on Mac) is pressed

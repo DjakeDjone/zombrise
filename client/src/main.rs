@@ -13,10 +13,11 @@ use std::{
     time::SystemTime,
 };
 use zombrise_shared::players::player::{
-    handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
+    handle_input, CameraRotation, DamageFlash, Health, JoinGame, MainCamera, Player, PlayerOwner,
+    VisualRotation,
 };
 use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
-use zombrise_shared::zombie::zombie::{setup_zombie_animation, Zombie, ZombieAnimations};
+use zombrise_shared::zombie::zombie::{setup_zombie_animation, Zombie};
 
 mod map;
 use map::{spawn_snow_landscape, SnowLandscapeConfig};
@@ -28,10 +29,47 @@ use startup_screen::{
 };
 
 mod death_screen;
-use death_screen::{detect_player_death, handle_death_screen_input, show_death_screen, PlayerDied};
+use death_screen::{
+    detect_player_death, handle_death_screen_input, show_death_screen, PlayerDied, PlayerSpawned,
+};
 
 #[derive(Resource)]
-pub struct MyClientId(pub u64);
+struct MyClientId(u64);
+
+#[derive(Resource, Default)]
+struct JoinGameSent(bool);
+
+#[derive(Component)]
+struct GameEntity;
+
+fn send_join_game(
+    mut join_sent: ResMut<JoinGameSent>,
+    mut join_writer: MessageWriter<JoinGame>,
+    client: Res<RenetClient>,
+    my_client_id: Res<MyClientId>,
+) {
+    if !join_sent.0 && client.is_connected() {
+        join_writer.write(JoinGame {
+            id: my_client_id.0,
+        });
+        join_sent.0 = true;
+    }
+}
+
+fn cleanup_game(
+    mut commands: Commands,
+    game_entities: Query<Entity, With<GameEntity>>,
+    mut join_sent: ResMut<JoinGameSent>,
+    mut player_died: ResMut<PlayerDied>,
+    mut player_spawned: ResMut<PlayerSpawned>,
+) {
+    for entity in game_entities.iter() {
+        commands.entity(entity).despawn();
+    }
+    join_sent.0 = false;
+    player_died.0 = false;
+    player_spawned.0 = false;
+}
 
 fn main() {
     App::new()
@@ -54,6 +92,8 @@ fn main() {
             pitch: -0.3,
         })
         .init_resource::<PlayerDied>()
+        .init_resource::<PlayerSpawned>()
+        .init_resource::<JoinGameSent>()
         .add_systems(Startup, setup_camera)
         .add_systems(OnEnter(AppState::StartupScreen), show_startup_screen)
         .add_systems(OnExit(AppState::StartupScreen), cleanup_startup_screen)
@@ -68,9 +108,11 @@ fn main() {
             OnEnter(AppState::Playing),
             (setup, setup_client, lock_cursor, spawn_game_camera),
         )
+        .add_systems(OnExit(AppState::Playing), cleanup_game)
         .add_systems(
             Update,
             (
+                send_join_game,
                 handle_input,
                 handle_camera_rotation,
                 camera_follow,
@@ -85,10 +127,19 @@ fn main() {
                 show_death_screen,
                 handle_death_screen_input,
                 handle_escape_key,
+                apply_visual_rotation,
             )
                 .run_if(in_state(AppState::Playing)),
         )
         .run();
+}
+
+fn apply_visual_rotation(mut query: Query<(&mut Transform, &VisualRotation)>) {
+    for (mut transform, visual_rotation) in &mut query {
+        if transform.rotation != visual_rotation.0 {
+            transform.rotation = visual_rotation.0;
+        }
+    }
 }
 
 fn setup_client(
@@ -138,9 +189,9 @@ fn setup_client(
     commands.insert_resource(MyClientId(client_id));
 }
 
-fn setup_camera(mut commands: Commands) {
-    // Camera - spawn at startup for UI rendering
-    commands.spawn(Camera2d);
+fn setup_camera(mut _commands: Commands) {
+    // Camera will be spawned when entering Playing state
+    // No need for a 2D camera here as Camera3d handles UI as well
 }
 
 fn spawn_game_camera(mut commands: Commands) {
@@ -148,6 +199,7 @@ fn spawn_game_camera(mut commands: Commands) {
         Camera3d::default(),
         Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
         MainCamera,
+        GameEntity,
     ));
 }
 
@@ -159,6 +211,7 @@ fn setup(mut commands: Commands) {
             ..default()
         },
         Transform::from_xyz(4.0, 8.0, 4.0),
+        GameEntity,
     ));
 
     // Additional directional light for better illumination
@@ -168,6 +221,7 @@ fn setup(mut commands: Commands) {
             ..default()
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::YXZ, -0.5, -0.5, 0.0)),
+        GameEntity,
     ));
 }
 
@@ -178,7 +232,9 @@ fn spawn_map_visuals(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for entity in query.iter() {
-        commands.entity(entity).insert(Transform::default());
+        commands
+            .entity(entity)
+            .insert((Transform::default(), GameEntity));
         // Spawn landscape without trees (trees come from server)
         spawn_snow_landscape(
             &mut commands,
@@ -225,6 +281,7 @@ fn spawn_tree_visuals(
                 Mesh3d(trunk_mesh.clone()),
                 MeshMaterial3d(bark_material.clone()),
                 trunk_transform,
+                GameEntity,
             ))
             .with_children(|parent| {
                 // Lower canopy (snow-covered)
@@ -266,6 +323,7 @@ fn spawn_player_visuals(
         commands.entity(entity).insert((
             Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
             MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
+            GameEntity,
         ));
     }
 }
@@ -279,6 +337,7 @@ fn spawn_zombie_visuals(
         commands.entity(entity).insert((
             SceneRoot(asset_server.load("zombie.glb#Scene0")),
             Transform::from_scale(Vec3::splat(1.0)),
+            GameEntity,
         ));
     }
 }

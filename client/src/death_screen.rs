@@ -5,21 +5,27 @@ use zombrise_shared::players::player::{Health, Player, PlayerOwner};
 #[derive(Resource, Default)]
 pub struct PlayerDied(pub bool);
 
+#[derive(Resource, Default)]
+pub struct PlayerSpawned(pub bool);
+
 #[derive(Component)]
 pub struct DeathScreenMarker;
 
 /// Detects when the player's health reaches zero or when the player entity is despawned
 pub fn detect_player_death(
     player_query: Query<(&Health, &PlayerOwner), With<Player>>,
-    client_id: Res<crate::MyClientId>,
+    my_client_id: Res<crate::MyClientId>,
     mut player_died: ResMut<PlayerDied>,
+    mut player_spawned: ResMut<PlayerSpawned>,
 ) {
     // Try to find our player
     let our_player = player_query
         .iter()
-        .find(|(_, owner)| owner.0 == client_id.0);
+        .find(|(_, owner)| owner.0 == my_client_id.0);
 
     if let Some((health, _)) = our_player {
+        player_spawned.0 = true;
+
         // Player exists - check health status
         if health.current <= 0.0 && !player_died.0 {
             player_died.0 = true;
@@ -31,7 +37,7 @@ pub fn detect_player_death(
         }
     } else {
         // Player entity not found - they were despawned from the server
-        if !player_died.0 {
+        if player_spawned.0 && !player_died.0 {
             player_died.0 = true;
             info!("Player died - entity was despawned from server!");
         }

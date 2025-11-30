@@ -7,13 +7,15 @@ use bevy_replicon_renet::{
     renet::{ConnectionConfig, RenetServer},
     RenetChannelsExt, RepliconRenetPlugins,
 };
-use renet_netcode::{NetcodeServerTransport, ServerAuthentication, ServerConfig};
 use rand::Rng;
+use renet_netcode::{NetcodeServerTransport, ServerAuthentication, ServerConfig};
 use std::{
     net::UdpSocket,
     time::{Duration, SystemTime},
 };
-use zombrise_shared::players::player::{DamageFlash, Health, Player, PlayerAttack, PlayerOwner};
+use zombrise_shared::players::player::{
+    DamageFlash, Health, JoinGame, Player, PlayerAttack, PlayerOwner, RepliconOwner, VisualRotation,
+};
 use zombrise_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
 use zombrise_shared::zombie::zombie::Zombie;
 
@@ -42,10 +44,7 @@ fn main() {
             TimerMode::Repeating,
         )))
         .add_systems(Startup, setup_server)
-        .add_systems(
-            Update,
-            (server_event_system, update_map_size, spawn_zombies),
-        )
+        .add_systems(Update, (handle_join_game, update_map_size, spawn_zombies))
         .add_systems(
             FixedUpdate,
             (
@@ -122,50 +121,50 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     println!("Server started on {}", public_addr);
 }
 
-fn server_event_system(
-    mut commands: Commands,
-    mut server_events: MessageReader<renet::ServerEvent>,
-) {
-    for event in server_events.read() {
-        match event {
-            renet::ServerEvent::ClientConnected { client_id } => {
-                println!("Client {:?} connected", client_id);
-                // Spawn player for client
-                commands.spawn((
-                    Player,
-                    PlayerOwner(*client_id),
-                    Health::default(),
-                    DamageFlash::default(),
-                    Replicated,
-                    Transform::from_xyz(0.0, 1.0, 0.0),
-                    GlobalTransform::default(),
-                    RigidBody::Dynamic,
-                    Collider::capsule_y(0.5, 0.5),
-                    Velocity::zero(),
-                    LockedAxes::ROTATION_LOCKED,
-                    Damping {
-                        linear_damping: 0.5,
-                        angular_damping: 0.0,
-                    },
-                ));
-            }
-            renet::ServerEvent::ClientDisconnected { client_id, reason } => {
-                println!("Client {:?} disconnected: {:?}", client_id, reason);
-            }
-        }
+fn handle_join_game(mut commands: Commands, mut join_events: MessageReader<FromClient<JoinGame>>) {
+    for FromClient {
+        client_id,
+        message: event,
+    } in join_events.read()
+    {
+        // SAFETY: ClientId is a wrapper around Entity (u64)
+        let client_id_u64: u64 = unsafe { std::mem::transmute(*client_id) };
+        commands.spawn((
+            Player,
+            PlayerOwner(event.id),
+            RepliconOwner(client_id_u64),
+            VisualRotation::default(),
+            Health::default(),
+            DamageFlash::default(),
+            Replicated,
+            Transform::from_xyz(0.0, 1.0, 0.0),
+            GlobalTransform::default(),
+            RigidBody::Dynamic,
+            Collider::capsule_y(0.5, 0.5),
+            Velocity::zero(),
+            LockedAxes::ROTATION_LOCKED,
+            Damping {
+                linear_damping: 0.5,
+                angular_damping: 0.0,
+            },
+        ));
     }
 }
 
 fn handle_move_player(
     mut events: MessageReader<FromClient<MovePlayer>>,
-    mut query: Query<(&PlayerOwner, &mut Velocity, &mut Transform)>,
+    mut query: Query<(&RepliconOwner, &mut Velocity, &mut VisualRotation)>,
 ) {
     let speed = 5.0;
-    for FromClient { client_id, message: event } in events.read() {
-        for (owner, mut velocity, mut transform) in &mut query {
-            // SAFETY: ClientId is a wrapper around u64
+    for FromClient {
+        client_id,
+        message: event,
+    } in events.read()
+    {
+        for (replicon_owner, mut velocity, mut visual_rotation) in &mut query {
+            // SAFETY: ClientId is a wrapper around Entity (u64)
             let client_id_u64: u64 = unsafe { std::mem::transmute(*client_id) };
-            if owner.0 == client_id_u64 {
+            if replicon_owner.0 == client_id_u64 {
                 // Rotate the input direction by the camera yaw
                 let yaw_rotation = Quat::from_rotation_y(event.camera_yaw);
                 let rotated_direction = yaw_rotation * event.direction;
@@ -176,7 +175,7 @@ fn handle_move_player(
                 if horizontal_direction.length() > 0.01 {
                     let target_rotation =
                         Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
-                    transform.rotation = target_rotation;
+                    visual_rotation.0 = target_rotation;
                 }
 
                 if event.direction.y > 0.0 {
@@ -212,6 +211,7 @@ fn spawn_zombies(mut commands: Commands, time: Res<Time>, mut timer: ResMut<Zomb
         commands.spawn((
             Zombie,
             Replicated,
+            VisualRotation::default(),
             Transform::from_xyz(x, 1.0, z),
             GlobalTransform::default(),
             RigidBody::Dynamic,
@@ -228,13 +228,13 @@ fn spawn_zombies(mut commands: Commands, time: Res<Time>, mut timer: ResMut<Zomb
 }
 
 fn zombie_movement(
-    mut zombie_query: Query<(&mut Velocity, &Transform), With<Zombie>>,
+    mut zombie_query: Query<(&mut Velocity, &Transform, &mut VisualRotation), With<Zombie>>,
     player_query: Query<&Transform, With<Player>>,
 ) {
     let speed = 2.0;
     let chase_range = 10.0;
 
-    for (mut velocity, zombie_transform) in &mut zombie_query {
+    for (mut velocity, zombie_transform, mut visual_rotation) in &mut zombie_query {
         let mut nearest_player_pos: Option<Vec3> = None;
         let mut min_dist = f32::MAX;
 
@@ -254,10 +254,14 @@ fn zombie_movement(
                 let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
                 velocity.linvel.x = direction.x * speed;
                 velocity.linvel.z = direction.z * speed;
-                // also rotate
-                let rotation = (player_pos - zombie_transform.translation).normalize_or_zero();
-                velocity.angvel.x = rotation.x * speed;
-                velocity.angvel.z = rotation.z * speed;
+
+                // Face player
+                let flat_target =
+                    Vec3::new(player_pos.x, zombie_transform.translation.y, player_pos.z);
+                let forward = (flat_target - zombie_transform.translation).normalize_or_zero();
+                if forward != Vec3::ZERO {
+                     visual_rotation.0 = Quat::from_rotation_arc(Vec3::NEG_Z, forward);
+                }
                 continue;
             }
         }
@@ -265,10 +269,10 @@ fn zombie_movement(
         // Random movement
         let change_direction_probability = 0.02;
         let random_number = rand::random::<f32>();
-        
+
         let mut direction = Vec3::ZERO;
         if velocity.linvel.length_squared() > 0.01 {
-             direction = velocity.linvel.normalize();
+            direction = velocity.linvel.normalize();
         }
 
         if random_number < change_direction_probability || direction == Vec3::ZERO {
@@ -280,13 +284,15 @@ fn zombie_movement(
             )
             .normalize_or_zero();
         }
-        
+
         // Move forward
         velocity.linvel.x = direction.x * speed;
         velocity.linvel.z = direction.z * speed;
-        // also rotate
-        velocity.angvel.x = direction.x * speed;
-        velocity.angvel.z = direction.z * speed;
+
+        // Face direction
+        if direction != Vec3::ZERO {
+            visual_rotation.0 = Quat::from_rotation_arc(Vec3::NEG_Z, direction.normalize());
+        }
     }
 }
 
@@ -319,7 +325,16 @@ fn zombie_collision_damage(
 
 fn handle_player_attack(
     mut events: MessageReader<FromClient<PlayerAttack>>,
-    mut player_query: Query<(Entity, &PlayerOwner, &Transform, &mut Health, &mut DamageFlash), With<Player>>,
+    mut player_query: Query<
+        (
+            Entity,
+            &RepliconOwner,
+            &Transform,
+            &mut Health,
+            &mut DamageFlash,
+        ),
+        With<Player>,
+    >,
     mut zombie_query: Query<(Entity, &Transform), With<Zombie>>,
     mut commands: Commands,
 ) {
@@ -331,10 +346,10 @@ fn handle_player_attack(
         let mut attacker_entity: Option<Entity> = None;
 
         // Find the attacking player
-        for (entity, owner, transform, _, _) in &player_query {
-            // SAFETY: ClientId is a wrapper around u64
+        for (entity, replicon_owner, transform, _, _) in &player_query {
+            // SAFETY: ClientId is a wrapper around Entity (u64)
             let client_id_u64: u64 = unsafe { std::mem::transmute(*client_id) };
-            if owner.0 == client_id_u64 {
+            if replicon_owner.0 == client_id_u64 {
                 attacker_pos = Some(transform.translation);
                 attacker_entity = Some(entity);
                 break;

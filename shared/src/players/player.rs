@@ -5,18 +5,20 @@ use bevy::{
         query::{With, Without},
         system::{Query, Res},
     },
-    math::Vec3,
+    math::{Quat, Vec3},
     prelude::Reflect,
     transform::components::Transform,
 };
 
 #[cfg(feature = "client")]
-use bevy::input::{ButtonInput, keyboard::KeyCode};
-use bevy_replicon::prelude::ClientId;
+use bevy::input::{keyboard::KeyCode, ButtonInput};
 use serde::{Deserialize, Serialize};
 
 #[derive(Component, Serialize, Deserialize, Reflect)]
 pub struct Player;
+
+#[derive(Component, Serialize, Deserialize, Reflect, Default)]
+pub struct VisualRotation(pub Quat);
 
 #[derive(Component, Serialize, Deserialize, Reflect, Clone)]
 pub struct Health {
@@ -41,6 +43,9 @@ pub struct DamageFlash {
 #[derive(Component, Serialize, Deserialize, Reflect)]
 pub struct PlayerOwner(pub u64);
 
+#[derive(Component, Reflect)]
+pub struct RepliconOwner(pub u64);
+
 #[derive(Component)]
 pub struct MainCamera;
 
@@ -59,6 +64,10 @@ pub struct DamagePlayer {
     pub amount: f32,
 }
 
+#[derive(Message, Serialize, Deserialize)]
+pub struct JoinGame {
+    pub id: u64,
+}
 
 #[cfg(feature = "client")]
 pub fn handle_input(
