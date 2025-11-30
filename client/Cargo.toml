@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 zombrise_shared = { path = "../shared", features = ["client"] }
 # Client gets all default Bevy features for full functionality
-bevy = "0.17.3"
+bevy = { version = "0.17.3", features = ["bevy_remote"] }
 bevy_replicon = "0.36.1"
 bevy_replicon_renet = "0.12"
 renet = "1.2.0"

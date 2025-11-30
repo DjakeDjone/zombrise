@@ -1,5 +1,6 @@
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
+use bevy::remote::{http::RemoteHttpPlugin, RemotePlugin};
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet::{
@@ -49,9 +50,7 @@ fn send_join_game(
     my_client_id: Res<MyClientId>,
 ) {
     if !join_sent.0 && client.is_connected() {
-        join_writer.write(JoinGame {
-            id: my_client_id.0,
-        });
+        join_writer.write(JoinGame { id: my_client_id.0 });
         join_sent.0 = true;
     }
 }
@@ -84,6 +83,9 @@ fn main() {
         .add_plugins(RepliconPlugins)
         .add_plugins(RepliconRenetPlugins)
         .add_plugins(SharedPlugin)
+        // Bevy Remote Protocol for debugging via bevy_debugger_mcp
+        .add_plugins(RemotePlugin::default())
+        .add_plugins(RemoteHttpPlugin::default())
         // .add_plugins(TextInputPlugin)  // TODO: Find Bevy 0.17 compatible version
         .init_state::<AppState>()
         .init_resource::<ServerConfig>()
