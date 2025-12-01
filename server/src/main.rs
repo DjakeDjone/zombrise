@@ -268,10 +268,10 @@ fn zombie_movement(
         // Random movement
         let change_direction_probability = 0.02;
         let random_number = rand::random::<f32>();
-        
+
         let mut direction = Vec3::ZERO;
         if velocity.linvel.length_squared() > 0.01 {
-             direction = velocity.linvel.normalize();
+            direction = velocity.linvel.normalize();
         }
 
         if random_number < change_direction_probability || direction == Vec3::ZERO {
@@ -283,7 +283,7 @@ fn zombie_movement(
             )
             .normalize_or_zero();
         }
-        
+
         // Move forward
         velocity.linvel.x = direction.x * speed;
         velocity.linvel.z = direction.z * speed;
@@ -322,7 +322,16 @@ fn zombie_collision_damage(
 
 fn handle_player_attack(
     mut events: EventReader<FromClient<PlayerAttack>>,
-    mut player_query: Query<(Entity, &PlayerOwner, &Transform, &mut Health, &mut DamageFlash), With<Player>>,
+    mut player_query: Query<
+        (
+            Entity,
+            &PlayerOwner,
+            &Transform,
+            &mut Health,
+            &mut DamageFlash,
+        ),
+        With<Player>,
+    >,
     mut zombie_query: Query<(Entity, &Transform), With<Zombie>>,
     mut commands: Commands,
 ) {

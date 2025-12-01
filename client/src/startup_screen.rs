@@ -169,7 +169,6 @@ pub fn handle_startup_ui(
         match *interaction {
             Interaction::Pressed => {
                 *color = Color::srgb(0.15, 0.5, 0.15).into();
-                // Update server config from input before connecting
                 if let Ok(input_value) = input_query.get_single() {
                     server_config.url = input_value.0.clone();
                 }
@@ -184,7 +183,6 @@ pub fn handle_startup_ui(
         }
     }
 
-    // Handle Enter key submission
     for event in submit_events.read() {
         if let Ok(input_value) = input_query.get(event.entity) {
             server_config.url = input_value.0.clone();
@@ -198,7 +196,6 @@ pub fn handle_copy_paste(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut evr_kbd: EventReader<KeyboardInput>,
 ) {
-    // Check if Ctrl (or Cmd on Mac) is pressed
     let ctrl_pressed = keyboard_input.pressed(KeyCode::ControlLeft)
         || keyboard_input.pressed(KeyCode::ControlRight)
         || keyboard_input.pressed(KeyCode::SuperLeft)
@@ -242,11 +239,7 @@ pub fn handle_copy_paste(
                         }
                     }
                 }
-                // Select All: Ctrl+A (just for completeness, though selection isn't visible)
-                KeyCode::KeyA => {
-                    // The text input doesn't support visible selection,
-                    // but we can at least acknowledge the shortcut
-                }
+                KeyCode::KeyA => {}
                 _ => {}
             }
         }

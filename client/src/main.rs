@@ -1,6 +1,6 @@
 use bevy::input::mouse::MouseMotion;
-use bevy::window::{CursorGrabMode, PrimaryWindow};
 use bevy::prelude::*;
+use bevy::window::{CursorGrabMode, PrimaryWindow};
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet::{
     renet::{
@@ -10,17 +10,15 @@ use bevy_replicon_renet::{
     RenetChannelsExt, RepliconRenetPlugins,
 };
 use bevy_simple_text_input::TextInputPlugin;
-use zombrise_shared::players::player::{
-    handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
-};
-use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
-use zombrise_shared::zombie::zombie::{
-    setup_zombie_animation, Zombie, ZombieAnimations,
-};
 use std::{
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
     time::SystemTime,
 };
+use zombrise_shared::players::player::{
+    handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
+};
+use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
+use zombrise_shared::zombie::zombie::{setup_zombie_animation, Zombie};
 
 mod map;
 use map::{spawn_snow_landscape, SnowLandscapeConfig};
@@ -291,12 +289,10 @@ fn camera_follow(
     for (player_transform, owner) in player_query.iter() {
         if owner.0.get() == my_client_id.0 {
             if let Ok(mut camera_transform) = camera_query.get_single_mut() {
-                // Calculate camera offset using yaw and pitch
                 let distance = 10.0;
                 let yaw = camera_rotation.yaw;
                 let pitch = camera_rotation.pitch;
 
-                // Calculate the offset vector from yaw and pitch
                 let offset = Vec3::new(
                     distance * pitch.cos() * yaw.sin(),
                     // distance * pitch.sin(),
@@ -471,11 +467,10 @@ fn display_health_bar(
             });
     }
 
-    // Update health bar if it exists
     if let Some(health) = our_health {
         let health_percent = (health.current / health.max * 100.0).max(0.0);
 
-        // Determine color based on health percentage
+        // color based on health percentage
         let bar_color = if health_percent > 60.0 {
             Color::srgb(0.2, 0.8, 0.2) // Green
         } else if health_percent > 30.0 {
@@ -484,7 +479,6 @@ fn display_health_bar(
             Color::srgb(1.0, 0.2, 0.2) // Red
         };
 
-        // Update health bar fill width and color
         if let Ok((mut style, mut bg_color)) = health_fill_query.get_single_mut() {
             style.width = Val::Percent(health_percent);
             *bg_color = bar_color.into();
