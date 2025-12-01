@@ -17,7 +17,7 @@ use std::{
 };
 use zombrise_shared::players::player::{DamageFlash, Health, Player, PlayerAttack, PlayerOwner};
 use zombrise_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
-use zombrise_shared::zombie::zombie::Zombie;
+use zombrise_shared::zombie::zombie::{Zombie, ZombieState};
 
 #[derive(Resource)]
 struct ZombieSpawnTimer(Timer);
@@ -214,11 +214,12 @@ fn spawn_zombies(mut commands: Commands, time: Res<Time>, mut timer: ResMut<Zomb
 
         commands.spawn((
             Zombie,
+            ZombieState::Idle,
             Replicated,
             Transform::from_xyz(x, 1.0, z),
             GlobalTransform::default(),
             RigidBody::Dynamic,
-            Collider::capsule_y(0.5, 0.5),
+            Collider::capsule_y(Zombie::HALF_HEIGHT, Zombie::RADIUS),
             Velocity::zero(),
             LockedAxes::ROTATION_LOCKED,
             Damping {
@@ -231,13 +232,13 @@ fn spawn_zombies(mut commands: Commands, time: Res<Time>, mut timer: ResMut<Zomb
 }
 
 fn zombie_movement(
-    mut zombie_query: Query<(&mut Velocity, &Transform), With<Zombie>>,
-    player_query: Query<&Transform, With<Player>>,
+    mut zombie_query: Query<(&mut Velocity, &mut Transform, &mut ZombieState), With<Zombie>>,
+    player_query: Query<&Transform, (With<Player>, Without<Zombie>)>,
 ) {
     let speed = 2.0;
     let chase_range = 10.0;
 
-    for (mut velocity, zombie_transform) in &mut zombie_query {
+    for (mut velocity, mut zombie_transform, mut state) in &mut zombie_query {
         let mut nearest_player_pos: Option<Vec3> = None;
         let mut min_dist = f32::MAX;
 
@@ -252,15 +253,22 @@ fn zombie_movement(
         }
 
         if let Some(player_pos) = nearest_player_pos {
-            if min_dist < chase_range {
+            if min_dist < Zombie::COLLISION_DAMAGE_RADIUS {
+                velocity.linvel = Vec3::ZERO;
+                *state = ZombieState::Attacking;
+                continue;
+            } else if min_dist < chase_range {
                 // Chase
                 let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
                 velocity.linvel.x = direction.x * speed;
                 velocity.linvel.z = direction.z * speed;
-                // also rotate
-                let rotation = (player_pos - zombie_transform.translation).normalize_or_zero();
-                velocity.angvel.x = rotation.x * speed;
-                velocity.angvel.z = rotation.z * speed;
+                
+                // Rotate towards player
+                let flat_direction = Vec3::new(direction.x, 0.0, direction.z).normalize_or_zero();
+                if flat_direction.length_squared() > 0.001 {
+                    zombie_transform.look_to(-flat_direction, Vec3::Y);
+                }
+                *state = ZombieState::Walking;
                 continue;
             }
         }
@@ -287,9 +295,20 @@ fn zombie_movement(
         // Move forward
         velocity.linvel.x = direction.x * speed;
         velocity.linvel.z = direction.z * speed;
-        // also rotate
-        velocity.angvel.x = direction.x * speed;
-        velocity.angvel.z = direction.z * speed;
+        
+        // Rotate in movement direction
+        let flat_direction = Vec3::new(direction.x, 0.0, direction.z).normalize_or_zero();
+        if flat_direction.length_squared() > 0.001 {
+            // zombie_transform.look_to(flat_direction, Vec3::Y);
+            // exactly opposite direction to face the player when moving
+            zombie_transform.look_to(-flat_direction, Vec3::Y);
+        }
+
+        if velocity.linvel.length_squared() > 0.1 {
+            *state = ZombieState::Walking;
+        } else {
+            *state = ZombieState::Idle;
+        }
     }
 }
 
@@ -299,7 +318,7 @@ fn zombie_collision_damage(
     time: Res<Time>,
 ) {
     const DAMAGE_PER_SECOND: f32 = 10.0;
-    const COLLISION_DISTANCE: f32 = 1.5;
+    const COLLISION_DISTANCE: f32 = Zombie::COLLISION_DAMAGE_RADIUS;
 
     for zombie_transform in &zombie_query {
         for (player_transform, mut health, mut damage_flash) in &mut player_query {
@@ -356,7 +375,7 @@ fn handle_player_attack(
             for (zombie_entity, zombie_transform) in &mut zombie_query {
                 let distance = attacker_pos.distance(zombie_transform.translation);
 
-                if distance < ATTACK_RANGE {
+                if distance < ATTACK_RANGE + Zombie::RADIUS {
                     commands.entity(zombie_entity).despawn();
                     println!("Player attacked zombie at distance {}", distance);
                 }

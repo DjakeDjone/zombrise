@@ -1,7 +1,7 @@
 pub use crate::players::player::{
     DamageFlash, DamagePlayer, Health, MovePlayer, Player, PlayerAttack, PlayerOwner,
 };
-pub use crate::zombie::zombie::Zombie;
+pub use crate::zombie::zombie::{Zombie, ZombieState};
 use bevy::prelude::*;
 use bevy_replicon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,7 @@ impl Plugin for SharedPlugin {
         app.replicate::<Health>();
         app.replicate::<DamageFlash>();
         app.replicate::<Zombie>();
+        app.replicate::<ZombieState>();
         app.replicate::<Transform>();
         app.replicate::<MapMarker>();
         app.replicate::<TreeMarker>();

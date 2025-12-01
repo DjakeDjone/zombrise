@@ -18,7 +18,7 @@ use zombrise_shared::players::player::{
     handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
 };
 use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
-use zombrise_shared::zombie::zombie::{setup_zombie_animation, Zombie};
+use zombrise_shared::zombie::zombie::{control_zombie_animation, setup_zombie_animation, Zombie};
 
 mod map;
 use map::{spawn_snow_landscape, SnowLandscapeConfig};
@@ -70,6 +70,7 @@ fn main() {
                 spawn_map_visuals,
                 spawn_zombie_visuals,
                 setup_zombie_animation,
+                control_zombie_animation,
                 spawn_tree_visuals,
                 animate_player_damage,
                 display_health_bar,
@@ -275,7 +276,7 @@ fn spawn_zombie_visuals(
         commands.entity(entity).insert(SceneBundle {
             scene: asset_server.load("zombie.glb#Scene0"),
             transform: Transform::from_scale(Vec3::splat(1.0)),
-            ..default()
+            ..default() 
         });
     }
 }
