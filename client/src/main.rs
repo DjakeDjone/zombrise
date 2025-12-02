@@ -1,5 +1,6 @@
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
+use bevy::render::view::NoFrustumCulling;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet::{
@@ -273,11 +274,14 @@ fn spawn_zombie_visuals(
     asset_server: Res<AssetServer>,
 ) {
     for entity in query.iter() {
-        commands.entity(entity).insert(SceneBundle {
-            scene: asset_server.load("zombie.glb#Scene0"),
-            transform: Transform::from_scale(Vec3::splat(1.0)),
-            ..default() 
-        });
+        commands.entity(entity).insert((
+            SceneBundle {
+                scene: asset_server.load("zombie.glb#Scene0"),
+                transform: Transform::from_scale(Vec3::splat(1.0)),
+                ..default()
+            },
+            NoFrustumCulling,
+        ));
     }
 }
 

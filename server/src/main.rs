@@ -34,7 +34,8 @@ fn main() {
                 .disable::<bevy::ui::UiPlugin>()
                 .disable::<bevy::text::TextPlugin>()
                 .disable::<bevy::gizmos::GizmoPlugin>()
-                .disable::<bevy::gltf::GltfPlugin>(),
+                .disable::<bevy::gltf::GltfPlugin>()
+                .disable::<bevy::window::WindowPlugin>(),
         )
         .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
             1.0 / 60.0,
@@ -262,7 +263,7 @@ fn zombie_movement(
                 let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
                 velocity.linvel.x = direction.x * speed;
                 velocity.linvel.z = direction.z * speed;
-                
+
                 // Rotate towards player
                 let flat_direction = Vec3::new(direction.x, 0.0, direction.z).normalize_or_zero();
                 if flat_direction.length_squared() > 0.001 {
@@ -295,7 +296,7 @@ fn zombie_movement(
         // Move forward
         velocity.linvel.x = direction.x * speed;
         velocity.linvel.z = direction.z * speed;
-        
+
         // Rotate in movement direction
         let flat_direction = Vec3::new(direction.x, 0.0, direction.z).normalize_or_zero();
         if flat_direction.length_squared() > 0.001 {
