@@ -26,7 +26,9 @@ use zombrise_shared::players::player::{
     handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
 };
 use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
-use zombrise_shared::zombie::zombie::{setup_zombie_animation, Zombie};
+use zombrise_shared::zombie::zombie::{
+    control_zombie_animation, setup_zombie_animation, update_zombie_animation_state, Zombie,
+};
 
 mod map;
 use map::{spawn_snow_landscape, SnowLandscapeConfig};
@@ -123,6 +125,8 @@ fn main() {
                 spawn_map_visuals,
                 spawn_zombie_visuals,
                 setup_zombie_animation,
+                update_zombie_animation_state,
+                control_zombie_animation,
                 spawn_tree_visuals,
                 animate_player_damage,
                 display_health_bar,
@@ -393,7 +397,7 @@ fn spawn_zombie_visuals(
                 Visibility::default(),
                 InheritedVisibility::default(),
                 ViewVisibility::default(),
-                Transform::default(),
+                Transform::from_rotation(Quat::from_rotation_y(std::f32::consts::PI)),
                 GlobalTransform::default(),
             ));
         });
