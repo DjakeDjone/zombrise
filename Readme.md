@@ -1,5 +1,7 @@
 # Readme
 
+![zombie screenshot](zombie_screenshot.png)
+
 ## About the game
 
 Zombrise is a 3D zombie game where you have to survive against hordes of zombies and kill them!
