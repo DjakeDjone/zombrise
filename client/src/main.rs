@@ -40,6 +40,17 @@ use startup_screen::{
 mod death_screen;
 use death_screen::{detect_player_death, handle_death_screen_input, show_death_screen, PlayerDied};
 
+fn client_event_system(client: Res<RenetClient>, mut player_died: ResMut<PlayerDied>) {
+    if client.is_disconnected() {
+        if !player_died.0 {
+            println!("Client disconnected");
+            player_died.0 = true;
+        }
+    } else if player_died.0 {
+        player_died.0 = false;
+    }
+}
+
 #[derive(Resource)]
 pub struct MyClientId(pub u64);
 
@@ -99,6 +110,7 @@ fn main() {
         .add_systems(
             Update,
             (
+                client_event_system,
                 handle_input,
                 handle_camera_rotation,
                 camera_follow,
@@ -175,8 +187,6 @@ fn setup_client(
 fn setup_camera(mut commands: Commands) {
     println!("=== SETUP_CAMERA CALLED ===");
 
-    // 1. 3D Camera (Renders the game world) - RENDER FIRST
-    // Start inactive - will be activated when entering Playing state
     let camera_3d_entity = commands
         .spawn((
             Camera3d::default(),
@@ -191,10 +201,7 @@ fn setup_camera(mut commands: Commands) {
         ))
         .id();
     println!("3D camera spawned (inactive): {:?}", camera_3d_entity);
-
-    // 2. UI Camera (Renders the Interface) - RENDER SECOND
-    // This camera handles all UI rendering
-    // Solid clear color for startup screen
+    
     let camera_2d_entity = commands
         .spawn((
             Camera2d,
@@ -246,7 +253,6 @@ fn cleanup_playing_state(
     mut commands: Commands,
     health_ui_query: Query<Entity, With<HealthBarUI>>,
 ) {
-    // Clean up health bar UI
     for entity in health_ui_query.iter() {
         commands.entity(entity).despawn();
     }
@@ -303,8 +309,6 @@ fn spawn_tree_visuals(
     let canopy_mesh = meshes.add(Sphere::new(0.9));
 
     for (entity, _transform) in query.iter() {
-        // Don't modify Transform - it's replicated from server
-        // Just add visual components
         commands
             .entity(entity)
             .insert((
@@ -602,7 +606,6 @@ fn display_health_bar(
             });
     }
 
-    // Update health bar if it exists
     if let Some(health) = our_health {
         let health_percent = (health.current / health.max * 100.0).max(0.0);
 

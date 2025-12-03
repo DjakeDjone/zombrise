@@ -14,26 +14,19 @@ pub fn detect_player_death(
     client_id: Res<crate::MyClientId>,
     mut player_died: ResMut<PlayerDied>,
 ) {
-    // Try to find our player
     let our_player = player_query
         .iter()
         .find(|(_, owner)| owner.0 == client_id.0);
 
     if let Some((health, _)) = our_player {
-        // Player exists - check health status
         if health.current <= 0.0 && !player_died.0 {
             player_died.0 = true;
-            // Player died - health reached zero
         } else if health.current > 0.0 && player_died.0 {
-            // Player has respawned or reconnected with health
             player_died.0 = false;
-            // Player respawned
         }
     } else {
-        // Player entity not found - they were despawned from the server
         if !player_died.0 {
             player_died.0 = true;
-            // Player died - entity was despawned from server
         }
     }
 }
@@ -52,7 +45,6 @@ pub fn show_death_screen(
             commands.entity(entity).despawn();
         }
 
-        // Unlock cursor when dead
         // Unlock cursor when dead
         // if let Ok(mut window) = window_query.single_mut() {
         //     window.cursor.grab_mode = CursorGrabMode::None;
@@ -76,7 +68,6 @@ pub fn show_death_screen(
                 DeathScreenMarker,
             ))
             .with_children(|parent| {
-                // "YOU DIED" text with shadow effect
                 parent
                     .spawn(Node {
                         position_type: PositionType::Relative,
