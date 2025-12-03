@@ -9,7 +9,7 @@ use bevy::mesh::skinning::SkinnedMesh;
 use bevy::pbr::prelude::*;
 use bevy::prelude::*;
 use bevy::scene::SceneRoot;
-use bevy::window::{PresentMode, PrimaryWindow, WindowPlugin};
+use bevy::window::{CursorGrabMode, CursorOptions, PresentMode, PrimaryWindow, WindowPlugin};
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet2::{
     netcode::{ClientAuthentication, NetcodeClientTransport},
@@ -33,8 +33,8 @@ use map::{spawn_snow_landscape, SnowLandscapeConfig};
 
 mod startup_screen;
 use startup_screen::{
-    cleanup_startup_screen, handle_copy_paste, handle_startup_ui, show_startup_screen, AppState,
-    ServerConfig,
+    cleanup_startup_screen, handle_copy_paste, handle_quick_connect_buttons, handle_startup_ui,
+    show_startup_screen, AppState, ServerConfig,
 };
 
 mod death_screen;
@@ -100,7 +100,12 @@ fn main() {
         .add_systems(OnExit(AppState::StartupScreen), cleanup_startup_screen)
         .add_systems(
             Update,
-            (handle_startup_ui, handle_copy_paste).run_if(in_state(AppState::StartupScreen)),
+            (
+                handle_startup_ui,
+                handle_copy_paste,
+                handle_quick_connect_buttons,
+            )
+                .run_if(in_state(AppState::StartupScreen)),
         )
         .add_systems(
             OnEnter(AppState::Playing),
@@ -265,14 +270,13 @@ fn spawn_map_visuals(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for entity in query.iter() {
-        // Don't insert Transform - it's already replicated from server
         commands.entity(entity).insert((
             Visibility::default(),
             InheritedVisibility::default(),
             ViewVisibility::default(),
             MapVisualsSpawned,
         ));
-        // Spawn landscape without trees (trees come from server)
+        // landscape without trees
         spawn_snow_landscape(
             &mut commands,
             &mut meshes,
@@ -289,14 +293,12 @@ fn spawn_tree_visuals(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Trunk: darker grey (visible under snow)
     let bark_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.25, 0.25, 0.25),
         perceptual_roughness: 0.9,
         ..default()
     });
 
-    // Foliage: snowy white (matte)
     let foliage_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.98, 0.98, 0.98),
         perceptual_roughness: 0.85,
@@ -320,7 +322,6 @@ fn spawn_tree_visuals(
                 TreeVisualsSpawned,
             ))
             .with_children(|parent| {
-                // Lower canopy (snow-covered)
                 let mut lower_canopy = Transform::from_translation(Vec3::new(0.0, 1.05, 0.0));
                 lower_canopy.scale = Vec3::new(1.6, 1.15, 1.6);
 
@@ -336,7 +337,6 @@ fn spawn_tree_visuals(
                     Name::new("Evergreen Foliage (Lower)"),
                 ));
 
-                // Upper canopy (snow-covered)
                 let mut upper_canopy = Transform::from_translation(Vec3::new(0.0, 1.7, 0.0));
                 upper_canopy.scale = Vec3::new(1.0, 1.1, 1.0);
 
@@ -379,7 +379,6 @@ fn spawn_zombie_visuals(
     asset_server: Res<AssetServer>,
 ) {
     for entity in query.iter() {
-        // First add visibility components to the parent entity
         commands.entity(entity).insert((
             ZombieVisualsSpawned,
             Visibility::default(),
@@ -387,7 +386,6 @@ fn spawn_zombie_visuals(
             ViewVisibility::default(),
         ));
 
-        // Then spawn the scene as a child
         commands.entity(entity).with_children(|parent| {
             parent.spawn((
                 SceneRoot(asset_server.load("zombie.glb#Scene0")),
@@ -444,19 +442,22 @@ fn handle_camera_rotation(
     }
 }
 
-fn lock_cursor() {
-    // if let Ok(mut window) = window_query.single_mut() {
-    //     window.cursor.grab_mode = CursorGrabMode::Locked;
-    //     window.cursor.visible = false;
-    // }
+fn lock_cursor(mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>) {
+    if let Some(mut options) = cursor_query.iter_mut().next() {
+        options.grab_mode = CursorGrabMode::Locked;
+        options.visible = false;
+    }
 }
 
-fn handle_escape_key(keys: Res<ButtonInput<KeyCode>>) {
+fn handle_escape_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>,
+) {
     if keys.just_pressed(KeyCode::Escape) {
-        // if let Ok(mut window) = window_query.single_mut() {
-        //     window.cursor.grab_mode = CursorGrabMode::None;
-        //     window.cursor.visible = true;
-        // }
+        if let Some(mut options) = cursor_query.iter_mut().next() {
+            options.grab_mode = CursorGrabMode::None;
+            options.visible = true;
+        }
     }
 }
 
