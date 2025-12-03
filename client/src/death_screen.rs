@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use zombrise_shared::players::player::{Health, Player, PlayerOwner};
 
 #[derive(Resource, Default)]
