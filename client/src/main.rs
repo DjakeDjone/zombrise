@@ -130,6 +130,7 @@ fn main() {
                 show_death_screen,
                 handle_death_screen_input,
                 handle_escape_key,
+                handle_lock_key,
             )
                 .run_if(in_state(AppState::Playing)),
         )
@@ -457,6 +458,18 @@ fn handle_escape_key(
         if let Some(mut options) = cursor_query.iter_mut().next() {
             options.grab_mode = CursorGrabMode::None;
             options.visible = true;
+        }
+    }
+}
+
+fn handle_lock_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>,
+) {
+    if keys.just_pressed(KeyCode::KeyL) {
+        if let Some(mut options) = cursor_query.iter_mut().next() {
+            options.grab_mode = CursorGrabMode::Locked;
+            options.visible = false;
         }
     }
 }
