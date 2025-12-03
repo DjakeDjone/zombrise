@@ -63,6 +63,7 @@ fn main() {
                 zombie_collision_damage,
                 update_damage_flash,
                 remove_dead_players,
+                remove_fallen_entities,
             ),
         )
         .run();
@@ -170,10 +171,10 @@ fn handle_move_player(
     let speed = 5.0;
     for FromClient {
         message: event,
-        client_id,
+        client_id: _,
     } in events.read()
     {
-        for (owner, mut velocity, mut transform) in &mut query {
+        for (_owner, mut velocity, mut transform) in &mut query {
             // if owner.0 != *client_id {
             //     continue;
             // }
@@ -422,6 +423,35 @@ fn remove_dead_players(
             println!("Removing dead player (Client ID: {:?})", owner.0);
             commands.entity(entity).despawn();
             server.disconnect(owner.0);
+        }
+    }
+}
+
+fn remove_fallen_entities(
+    mut commands: Commands,
+    player_query: Query<(Entity, &Transform, &PlayerOwner), With<Player>>,
+    zombie_query: Query<(Entity, &Transform), With<Zombie>>,
+    mut server: ResMut<RenetServer>,
+) {
+    const FALL_DEATH_Y: f32 = -10.0;
+
+    // Remove fallen players
+    for (entity, transform, owner) in &player_query {
+        if transform.translation.y < FALL_DEATH_Y {
+            println!("Player fell to death (Client ID: {:?})", owner.0);
+            commands.entity(entity).despawn();
+            server.disconnect(owner.0);
+        }
+    }
+
+    // Remove fallen zombies
+    for (entity, transform) in &zombie_query {
+        if transform.translation.y < FALL_DEATH_Y {
+            println!(
+                "Zombie fell to death at position: {:?}",
+                transform.translation
+            );
+            commands.entity(entity).despawn();
         }
     }
 }
