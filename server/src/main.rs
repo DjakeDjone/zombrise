@@ -1,4 +1,7 @@
-use bevy::{app::ScheduleRunnerPlugin, asset::AssetPlugin, mesh::MeshPlugin, prelude::*, scene::ScenePlugin, state::app::StatesPlugin};
+use bevy::{
+    app::ScheduleRunnerPlugin, asset::AssetPlugin, mesh::MeshPlugin, prelude::*,
+    scene::ScenePlugin, state::app::StatesPlugin,
+};
 use std::time::Duration;
 
 use avian3d::prelude::*;
@@ -130,10 +133,7 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     println!("Server started on {}", public_addr);
 }
 
-fn server_event_system(
-    mut commands: Commands,
-    mut server_events: MessageReader<ServerEvent>,
-) {
+fn server_event_system(mut commands: Commands, mut server_events: MessageReader<ServerEvent>) {
     for event in server_events.read() {
         match event {
             ServerEvent::ClientConnected { client_id } => {
@@ -390,6 +390,7 @@ fn remove_dead_players(
         if health.current <= 0.0 {
             println!("Removing dead player (Client ID: {:?})", owner.0);
             commands.entity(entity).despawn();
+            // TODO: remove connection
         }
     }
 }
