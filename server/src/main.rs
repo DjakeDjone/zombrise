@@ -169,10 +169,7 @@ fn handle_move_player(
 ) {
     let speed = 5.0;
     for FromClient { message: event, .. } in events.read() {
-        // Note: In bevy_replicon, each client only sends events for themselves
-        // So we can apply the movement to all players
         for (_, mut velocity, mut transform) in &mut query {
-            // Rotate the input direction by the camera yaw
             let yaw_rotation = Quat::from_rotation_y(event.camera_yaw);
             let rotated_direction = yaw_rotation * event.direction;
 
@@ -333,7 +330,6 @@ fn handle_player_attack(
     const PLAYER_DAMAGE: f32 = 10.0;
 
     for FromClient { .. } in events.read() {
-        // Note: In bevy_replicon, each client only sends events for themselves
         let mut attacker_pos: Option<Vec3> = None;
         let mut attacker_entity: Option<Entity> = None;
 
@@ -385,12 +381,13 @@ fn update_damage_flash(mut query: Query<&mut DamageFlash>, time: Res<Time>) {
 fn remove_dead_players(
     mut commands: Commands,
     player_query: Query<(Entity, &Health, &PlayerOwner), With<Player>>,
+    mut 
 ) {
     for (entity, health, owner) in &player_query {
         if health.current <= 0.0 {
             println!("Removing dead player (Client ID: {:?})", owner.0);
+            server.disconnect(owner.0);
             commands.entity(entity).despawn();
-            // TODO: remove connection
         }
     }
 }
