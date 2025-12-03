@@ -1,11 +1,9 @@
 name: Release
 
 on:
-  release:
-    types: [published]
   push:
     tags:
-      - "v*.*.*" # Triggers on version tags like v1.0.0
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       tag_name:
@@ -16,12 +14,14 @@ env:
   CARGO_TERM_COLOR: always
   GAME_NAME: zombrise
 
+permissions:
+  contents: write
+
 jobs:
-  build-release:
+  # PHASE 1: Build binaries for all platforms
+  build:
     name: Build ${{ matrix.platform.name }}
     runs-on: ${{ matrix.platform.os }}
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -29,34 +29,12 @@ jobs:
           - name: Linux x86_64
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: zombrise-linux-x86_64
-            client_binary: zombrise_client
-            server_binary: zombrise_server
-            archive_ext: tar.gz
-
+            binary_name: zombrise_client
+            
           - name: Windows x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: zombrise-windows-x86_64
-            client_binary: zombrise_client.exe
-            server_binary: zombrise_server.exe
-            archive_ext: zip
-
-          # - name: macOS x86_64
-          #   os: macos-latest
-          #   target: x86_64-apple-darwin
-          #   artifact_name: zombrise-macos-x86_64
-          #   client_binary: zombrise_client
-          #   server_binary: zombrise_server
-          #   archive_ext: tar.gz
-
-          # - name: macOS ARM64
-          #   os: macos-latest
-          #   target: aarch64-apple-darwin
-          #   artifact_name: zombrise-macos-arm64
-          #   client_binary: zombrise_client
-          #   server_binary: zombrise_server
-          #   archive_ext: tar.gz
+            binary_name: zombrise_client.exe
 
     steps:
       - name: Checkout code
@@ -67,98 +45,117 @@ jobs:
         with:
           targets: ${{ matrix.platform.target }}
 
+      - name: Cache apt packages
+        if: matrix.platform.os == 'ubuntu-latest'
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/release.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
       - name: Install Linux dependencies
         if: matrix.platform.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libasound2-dev \
-            libudev-dev \
-            libwayland-dev \
-            libxkbcommon-dev \
-            pkg-config
+          sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config pigz
+
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.5
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.platform.target }}
+          cache-all-crates: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build binaries
-        run: cargo build --release --bin zombrise_client --bin zombrise_server --target ${{ matrix.platform.target }}
+      - name: Build binary
+        env:
+          RUSTC_WRAPPER: sccache
+          SCCACHE_GHA_ENABLED: "true"
+        run: cargo build --release --bin zombrise_client --target ${{ matrix.platform.target }}
 
-      - name: Prepare release directory (Unix)
-        if: matrix.platform.os != 'windows-latest'
+      - name: Prepare Archive
+        shell: bash
         run: |
-          mkdir -p release/${{ matrix.platform.artifact_name }}
-          cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.client_binary }} release/${{ matrix.platform.artifact_name }}/
-          cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.server_binary }} release/${{ matrix.platform.artifact_name }}/
-          # Copy assets from root assets/ if present, otherwise fall back to client/assets
-          if [ -d assets ]; then
-            cp -r assets release/${{ matrix.platform.artifact_name }}/
-          elif [ -d client/assets ]; then
-            cp -r client/assets release/${{ matrix.platform.artifact_name }}/assets
+          # 1. Create unique staging directory
+          STAGING="zombrise-${{ matrix.platform.target }}"
+          mkdir -p "$STAGING"
+
+          # 2. Copy Binary
+          cp "target/${{ matrix.platform.target }}/release/${{ matrix.platform.binary_name }}" "$STAGING/"
+
+          # 3. Copy Assets (Check root assets, then client/assets)
+          if [ -d "assets" ]; then
+            cp -r assets "$STAGING/"
+          elif [ -d "client/assets" ]; then
+            # Create assets dir inside staging to match structure
+            mkdir -p "$STAGING/assets"
+            cp -r client/assets/* "$STAGING/assets/"
           else
-            echo "Warning: assets not found in 'assets/' or 'client/assets'. Release will not include assets."
+            echo "::warning::Assets not found!"
           fi
 
-          # Create README for the release
-          cat > release/${{ matrix.platform.artifact_name }}/README.txt << 'EOF'
+          # 4. Create README
+          cat > "$STAGING/README.txt" <<EOF
           Zombrise
-
-          To run the game:
-          1. Start the server: ./${{ matrix.platform.server_binary }}
-          2. Start the client: ./${{ matrix.platform.client_binary }}
-
-          The assets folder must be in the same directory as the executables.
+          To run the game: ./${{ matrix.platform.binary_name }}
           EOF
 
-      - name: Prepare release directory (Windows)
-        if: matrix.platform.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path release/${{ matrix.platform.artifact_name }}
-          Copy-Item target/${{ matrix.platform.target }}/release/${{ matrix.platform.client_binary }} release/${{ matrix.platform.artifact_name }}/
-          Copy-Item target/${{ matrix.platform.target }}/release/${{ matrix.platform.server_binary }} release/${{ matrix.platform.artifact_name }}/
-          # Copy assets from root assets/ if present, otherwise fall back to client/assets
-          if (Test-Path -Path 'assets') {
-            Copy-Item -Recurse assets release/${{ matrix.platform.artifact_name }}/
-          } elseif (Test-Path -Path 'client/assets') {
-            Copy-Item -Recurse client/assets (Join-Path "release/${{ matrix.platform.artifact_name }}" "assets")
-          } else {
-            Write-Warning "assets not found in 'assets' or 'client/assets'. Release will not include assets."
-          }
+          # 5. Compress (use parallel compression for speed)
+          if [ "${{ matrix.platform.os }}" = "windows-latest" ]; then
+            # Use 7z with multiple threads
+            7z a -mmt=on "$STAGING.zip" "$STAGING"
+            echo "ASSET=$STAGING.zip" >> $GITHUB_ENV
+          else
+            # Use pigz (parallel gzip) if available, otherwise fallback to gzip
+            if command -v pigz &> /dev/null; then
+              tar -I pigz -cf "$STAGING.tar.gz" "$STAGING"
+            else
+              tar -czf "$STAGING.tar.gz" "$STAGING"
+            fi
+            echo "ASSET=$STAGING.tar.gz" >> $GITHUB_ENV
+          fi
 
-          # Create README for the release
-          @"
-          Zombrise
-
-          To run the game:
-          1. Start the server: ${{ matrix.platform.server_binary }}
-          2. Start the client: ${{ matrix.platform.client_binary }}
-
-          The assets folder must be in the same directory as the executables.
-          "@ | Out-File -FilePath release/${{ matrix.platform.artifact_name }}/README.txt
-
-      - name: Create archive (tar.gz)
-        if: matrix.platform.archive_ext == 'tar.gz'
-        working-directory: release
-        run: |
-          tar -czf ${{ matrix.platform.artifact_name }}.tar.gz ${{ matrix.platform.artifact_name }}
-
-      - name: Create archive (zip)
-        if: matrix.platform.archive_ext == 'zip'
-        working-directory: release
-        shell: pwsh
-        run: |
-          Compress-Archive -Path ${{ matrix.platform.artifact_name }} -DestinationPath ${{ matrix.platform.artifact_name }}.zip
-
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v1
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ inputs.tag_name }}
-          files: ./release/${{ matrix.platform.artifact_name }}.${{ matrix.platform.archive_ext }}
-          name: Zombrise ${{ inputs.tag_name || github.ref_name }}
-          draft: false
+          name: zombrise-${{ matrix.platform.target }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  # PHASE 2: Create Release and Upload Assets
+  create-release:
+    name: Create Release
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine Tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts (debug)
+        run: ls -R artifacts
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: Zombrise ${{ steps.tag.outputs.name }}
+          draft: true
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: artifacts/*
