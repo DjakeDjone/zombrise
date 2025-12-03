@@ -201,7 +201,7 @@ fn setup_camera(mut commands: Commands) {
         ))
         .id();
     println!("3D camera spawned (inactive): {:?}", camera_3d_entity);
-    
+
     let camera_2d_entity = commands
         .spawn((
             Camera2d,
@@ -444,17 +444,14 @@ fn handle_camera_rotation(
     }
 }
 
-fn lock_cursor(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
+fn lock_cursor() {
     // if let Ok(mut window) = window_query.single_mut() {
     //     window.cursor.grab_mode = CursorGrabMode::Locked;
     //     window.cursor.visible = false;
     // }
 }
 
-fn handle_escape_key(
-    keys: Res<ButtonInput<KeyCode>>,
-    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
-) {
+fn handle_escape_key(keys: Res<ButtonInput<KeyCode>>) {
     if keys.just_pressed(KeyCode::Escape) {
         // if let Ok(mut window) = window_query.single_mut() {
         //     window.cursor.grab_mode = CursorGrabMode::None;
