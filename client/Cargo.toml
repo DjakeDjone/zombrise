@@ -36,3 +36,36 @@ renet2_netcode = "0.11"
 bevy_simple_text_input = "0.12"
 arboard = "3.6"
 avian3d = "0.4"
+
+[package.metadata.deb]
+maintainer = "DjakeDjone"
+copyright = "2025, DjakeDjone"
+license-file = ["../LICENSE"]
+extended-description = """\
+A zombie survival game built with Bevy engine.
+This package contains the game client."""
+depends = "$auto"
+section = "games"
+priority = "optional"
+assets = [
+    [
+        "target/release/zombrise_client",
+        "usr/bin/zombrise",
+        "755",
+    ],
+    [
+        "client/assets/",
+        "usr/share/zombrise/assets/",
+        "644",
+    ],
+]
+
+[package.metadata.deb.variants.zombrise]
+name = "zombrise"
+
+[[package.metadata.deb.desktop]]
+name = "Zombrise"
+comment = "Zombie survival game"
+exec = "/usr/bin/zombrise"
+terminal = false
+categories = "Game"
