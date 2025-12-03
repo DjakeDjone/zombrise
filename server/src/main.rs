@@ -213,8 +213,18 @@ fn update_map_size(
     }
 }
 
-fn spawn_zombies(mut commands: Commands, time: Res<Time>, mut timer: ResMut<ZombieSpawnTimer>) {
+fn spawn_zombies(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut timer: ResMut<ZombieSpawnTimer>,
+    zombie_query: Query<&Zombie>,
+) {
     if timer.0.tick(time.delta()).just_finished() {
+        let zombie_count = zombie_query.iter().count();
+        if zombie_count >= 30 {
+            return;
+        }
+
         let mut rng = rand::rng();
         let x = rng.random_range(-20.0..20.0);
         let z = rng.random_range(-20.0..20.0);
