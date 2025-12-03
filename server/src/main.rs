@@ -56,15 +56,15 @@ fn main() {
                 spawn_zombies,
             ),
         )
-        .add_systems(
-            FixedUpdate,
-            (
-                zombie_movement,
-                zombie_collision_damage,
-                update_damage_flash,
-                remove_dead_players,
-            ),
-        )
+        // .add_systems(
+        //     FixedUpdate,
+        //     (
+        //         zombie_movement,
+        //         zombie_collision_damage,
+        //         update_damage_flash,
+        //         remove_dead_players,
+        //     ),
+        // )
         .run();
 }
 
@@ -378,16 +378,16 @@ fn update_damage_flash(mut query: Query<&mut DamageFlash>, time: Res<Time>) {
     }
 }
 
-fn remove_dead_players(
-    mut commands: Commands,
-    player_query: Query<(Entity, &Health, &PlayerOwner), With<Player>>,
-    mut 
-) {
-    for (entity, health, owner) in &player_query {
-        if health.current <= 0.0 {
-            println!("Removing dead player (Client ID: {:?})", owner.0);
-            server.disconnect(owner.0);
-            commands.entity(entity).despawn();
-        }
-    }
-}
+// fn remove_dead_players(
+//     mut commands: Commands,
+//     player_query: Query<(Entity, &Health, &PlayerOwner), With<Player>>,
+//     mut
+// ) {
+//     for (entity, health, owner) in &player_query {
+//         if health.current <= 0.0 {
+//             println!("Removing dead player (Client ID: {:?})", owner.0);
+//             server.disconnect(owner.0);
+//             commands.entity(entity).despawn();
+//         }
+//     }
+// }
