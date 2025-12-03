@@ -19,8 +19,8 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            // url: "127.0.0.1:5000".to_string(),
-            url: "138.199.203.159:5000".to_string(),
+            url: "127.0.0.1:5000".to_string(),
+            // url: "138.199.203.159:5000".to_string(),
         }
     }
 }
@@ -33,6 +33,12 @@ pub(crate) struct ServerUrlInput;
 
 #[derive(Component)]
 pub(crate) struct ConnectButton;
+
+#[derive(Component)]
+pub(crate) struct LocalButton;
+
+#[derive(Component)]
+pub(crate) struct RemoteButton;
 
 pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConfig>) {
     println!("=== SHOW_STARTUP_SCREEN ===");
@@ -107,6 +113,50 @@ pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConf
                 },
                 ServerUrlInput,
             ));
+
+            // local or remote connection buttons for quick configuration
+            parent
+                .spawn(Node {
+                    flex_direction: FlexDirection::Row,
+                    column_gap: Val::Px(10.0),
+                    margin: UiRect::bottom(Val::Px(20.0)),
+                    ..default()
+                })
+                .with_children(|row_parent| {
+                    row_parent
+                        .spawn((
+                            Button,
+                            Node {
+                                width: Val::Px(100.0),
+                                height: Val::Px(40.0),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            BackgroundColor(Color::srgb(0.2, 0.2, 0.25).into()),
+                            LocalButton,
+                        ))
+                        .with_children(|button_parent| {
+                            button_parent.spawn(Text::new("Local"));
+                        });
+
+                    row_parent
+                        .spawn((
+                            Button,
+                            Node {
+                                width: Val::Px(100.0),
+                                height: Val::Px(40.0),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            BackgroundColor(Color::srgb(0.2, 0.2, 0.25).into()),
+                            RemoteButton,
+                        ))
+                        .with_children(|button_parent| {
+                            button_parent.spawn(Text::new("Remote"));
+                        });
+                });
 
             // Connect button
             parent
@@ -232,6 +282,60 @@ pub fn handle_copy_paste(
                     // but we can at least acknowledge the shortcut
                 }
                 _ => {}
+            }
+        }
+    }
+}
+
+pub fn handle_quick_connect_buttons(
+    mut local_button_query: Query<
+        (&Interaction, &mut BackgroundColor),
+        (Changed<Interaction>, With<LocalButton>),
+    >,
+    mut remote_button_query: Query<
+        (&Interaction, &mut BackgroundColor),
+        (
+            Changed<Interaction>,
+            With<RemoteButton>,
+            Without<LocalButton>,
+        ),
+    >,
+    mut input_query: Query<&mut TextInputValue, With<ServerUrlInput>>,
+) {
+    // Handle Local button
+    for (interaction, mut color) in &mut local_button_query {
+        match *interaction {
+            Interaction::Pressed => {
+                *color = Color::srgb(0.15, 0.15, 0.2).into();
+                // Set to local server address
+                if let Ok(mut input_value) = input_query.single_mut() {
+                    input_value.0 = "127.0.0.1:5000".to_string();
+                }
+            }
+            Interaction::Hovered => {
+                *color = Color::srgb(0.3, 0.3, 0.35).into();
+            }
+            Interaction::None => {
+                *color = Color::srgb(0.2, 0.2, 0.25).into();
+            }
+        }
+    }
+
+    // Handle Remote button
+    for (interaction, mut color) in &mut remote_button_query {
+        match *interaction {
+            Interaction::Pressed => {
+                *color = Color::srgb(0.15, 0.15, 0.2).into();
+                // Set to remote server address
+                if let Ok(mut input_value) = input_query.single_mut() {
+                    input_value.0 = "138.199.203.159:5000".to_string();
+                }
+            }
+            Interaction::Hovered => {
+                *color = Color::srgb(0.3, 0.3, 0.35).into();
+            }
+            Interaction::None => {
+                *color = Color::srgb(0.2, 0.2, 0.25).into();
             }
         }
     }
