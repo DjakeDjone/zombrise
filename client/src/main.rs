@@ -1,4 +1,11 @@
+use bevy::animation::{AnimationPlayer, AnimationTarget};
+use bevy::camera::primitives::Aabb;
+use bevy::ecs::hierarchy::ChildOf;
+use bevy::gltf::{
+    GltfExtras, GltfMaterialExtras, GltfMaterialName, GltfMeshExtras, GltfMeshName, GltfSceneExtras,
+};
 use bevy::input::mouse::MouseMotion;
+use bevy::mesh::skinning::SkinnedMesh;
 use bevy::pbr::prelude::*;
 use bevy::prelude::*;
 use bevy::scene::SceneRoot;
@@ -63,6 +70,21 @@ fn main() {
         .register_type::<InheritedVisibility>()
         .register_type::<ViewVisibility>()
         .register_type::<bevy::transform::components::TransformTreeChanged>()
+        .register_type::<Children>()
+        .register_type::<ChildOf>()
+        .register_type::<Name>()
+        .register_type::<AnimationTarget>()
+        .register_type::<AnimationPlayer>()
+        .register_type::<SkinnedMesh>()
+        .register_type::<MeshMaterial3d<StandardMaterial>>()
+        .register_type::<Mesh3d>()
+        .register_type::<Aabb>()
+        .register_type::<GltfMeshName>()
+        .register_type::<GltfMaterialName>()
+        .register_type::<GltfExtras>()
+        .register_type::<GltfSceneExtras>()
+        .register_type::<GltfMeshExtras>()
+        .register_type::<GltfMaterialExtras>()
         .add_systems(OnEnter(AppState::StartupScreen), show_startup_screen)
         .add_systems(OnExit(AppState::StartupScreen), cleanup_startup_screen)
         .add_systems(
@@ -152,36 +174,43 @@ fn setup_client(
 
 fn setup_camera(mut commands: Commands) {
     println!("=== SETUP_CAMERA CALLED ===");
-    
+
     // 1. 3D Camera (Renders the game world) - RENDER FIRST
     // Start inactive - will be activated when entering Playing state
-    let camera_3d_entity = commands.spawn((
-        Camera3d::default(),
-        Camera {
-            order: 0, // Render first
-            is_active: false, // Inactive during startup screen
-            clear_color: ClearColorConfig::Custom(Color::srgb(0.64, 0.74, 0.88)), // Sky color
-            ..default()
-        },
-        Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
-        MainCamera,
-    )).id();
+    let camera_3d_entity = commands
+        .spawn((
+            Camera3d::default(),
+            Camera {
+                order: 0,                                                             // Render first
+                is_active: false, // Inactive during startup screen
+                clear_color: ClearColorConfig::Custom(Color::srgb(0.64, 0.74, 0.88)), // Sky color
+                ..default()
+            },
+            Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+            MainCamera,
+        ))
+        .id();
     println!("3D camera spawned (inactive): {:?}", camera_3d_entity);
 
     // 2. UI Camera (Renders the Interface) - RENDER SECOND
     // This camera handles all UI rendering
     // Solid clear color for startup screen
-    let camera_2d_entity = commands.spawn((
-        Camera2d,
-        Camera {
-            order: 1, // Render after 3D camera
-            clear_color: ClearColorConfig::Custom(Color::srgb(0.15, 0.15, 0.2)),
-            ..default()
-        },
-        IsDefaultUiCamera,
-    )).id();
-    println!("UI camera spawned (active with clear color): {:?}", camera_2d_entity);
-    
+    let camera_2d_entity = commands
+        .spawn((
+            Camera2d,
+            Camera {
+                order: 1, // Render after 3D camera
+                clear_color: ClearColorConfig::Custom(Color::srgb(0.15, 0.15, 0.2)),
+                ..default()
+            },
+            IsDefaultUiCamera,
+        ))
+        .id();
+    println!(
+        "UI camera spawned (active with clear color): {:?}",
+        camera_2d_entity
+    );
+
     println!("=== SETUP_CAMERA COMPLETE ===");
 }
 
@@ -231,14 +260,12 @@ fn spawn_map_visuals(
 ) {
     for entity in query.iter() {
         // Don't insert Transform - it's already replicated from server
-        commands
-            .entity(entity)
-            .insert((
-                Visibility::default(),
-                InheritedVisibility::default(),
-                ViewVisibility::default(),
-                MapVisualsSpawned,
-            ));
+        commands.entity(entity).insert((
+            Visibility::default(),
+            InheritedVisibility::default(),
+            ViewVisibility::default(),
+            MapVisualsSpawned,
+        ));
         // Spawn landscape without trees (trees come from server)
         spawn_snow_landscape(
             &mut commands,
@@ -348,7 +375,15 @@ fn spawn_zombie_visuals(
     asset_server: Res<AssetServer>,
 ) {
     for entity in query.iter() {
-        // Spawn the scene as a child to avoid Transform conflicts
+        // First add visibility components to the parent entity
+        commands.entity(entity).insert((
+            ZombieVisualsSpawned,
+            Visibility::default(),
+            InheritedVisibility::default(),
+            ViewVisibility::default(),
+        ));
+
+        // Then spawn the scene as a child
         commands.entity(entity).with_children(|parent| {
             parent.spawn((
                 SceneRoot(asset_server.load("zombie.glb#Scene0")),
@@ -359,12 +394,6 @@ fn spawn_zombie_visuals(
                 GlobalTransform::default(),
             ));
         });
-        commands.entity(entity).insert((
-            ZombieVisualsSpawned,
-            Visibility::default(),
-            InheritedVisibility::default(),
-            ViewVisibility::default(),
-        ));
     }
 }
 
