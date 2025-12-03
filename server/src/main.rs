@@ -19,10 +19,25 @@ use std::{
 };
 use zombrise_shared::players::player::{DamageFlash, Health, Player, PlayerAttack, PlayerOwner};
 use zombrise_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
-use zombrise_shared::zombie::zombie::Zombie;
+use zombrise_shared::zombie::zombie::{Zombie, ZOMBIE_SPEED};
 
 #[derive(Resource)]
 struct ZombieSpawnTimer(Timer);
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+enum ZombieAiState {
+    #[default]
+    Idle,
+    Wandering,
+    Chasing,
+}
+
+#[derive(Component)]
+struct ZombieBehavior {
+    state: ZombieAiState,
+    timer: Timer,
+    wander_direction: Vec3,
+}
 
 fn main() {
     App::new()
@@ -242,19 +257,28 @@ fn spawn_zombies(
             LockedAxes::new().lock_rotation_x().lock_rotation_z(),
             LinearDamping(0.5),
             AngularDamping(20.0),
+            ZombieBehavior {
+                state: ZombieAiState::Idle,
+                timer: Timer::from_seconds(rng.random_range(1.0..3.0), TimerMode::Once),
+                wander_direction: Vec3::ZERO,
+            },
         ));
         println!("Zombie spawned at {}, {}", x, z);
     }
 }
 
 fn zombie_movement(
-    mut zombie_query: Query<(&mut LinearVelocity, &mut Transform), (With<Zombie>, Without<Player>)>,
+    mut zombie_query: Query<
+        (&mut LinearVelocity, &mut Transform, &mut ZombieBehavior),
+        (With<Zombie>, Without<Player>),
+    >,
     player_query: Query<&Transform, (With<Player>, Without<Zombie>)>,
+    time: Res<Time>,
 ) {
-    let speed = 2.0;
+    let speed = ZOMBIE_SPEED;
     let chase_range = 10.0;
 
-    for (mut lin_vel, mut zombie_transform) in &mut zombie_query {
+    for (mut lin_vel, mut zombie_transform, mut behavior) in &mut zombie_query {
         let mut nearest_player_pos: Option<Vec3> = None;
         let mut min_dist = f32::MAX;
 
@@ -268,9 +292,12 @@ fn zombie_movement(
             }
         }
 
+        // Check if we should chase
         if let Some(player_pos) = nearest_player_pos {
             if min_dist < chase_range {
-                // Chase
+                behavior.state = ZombieAiState::Chasing;
+
+                // Chase logic
                 let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
                 lin_vel.x = direction.x * speed;
                 lin_vel.z = direction.z * speed;
@@ -286,35 +313,60 @@ fn zombie_movement(
             }
         }
 
-        // Random movement
-        let change_direction_probability = 0.02;
-        let random_number = rand::random::<f32>();
-
-        let mut direction = Vec3::ZERO;
-        if lin_vel.length_squared() > 0.01 {
-            direction = lin_vel.normalize();
+        // If we were chasing but lost the player, go back to idle
+        if behavior.state == ZombieAiState::Chasing {
+            behavior.state = ZombieAiState::Idle;
+            behavior.timer = Timer::from_seconds(1.0, TimerMode::Once);
         }
 
-        if random_number < change_direction_probability || direction == Vec3::ZERO {
-            // Change direction
-            direction = Vec3::new(
-                rand::random::<f32>() * 2.0 - 1.0,
-                0.0,
-                rand::random::<f32>() * 2.0 - 1.0,
-            )
-            .normalize_or_zero();
-        }
+        // Handle Idle and Wandering states
+        behavior.timer.tick(time.delta());
 
-        // Move forward
-        lin_vel.x = direction.x * speed;
-        lin_vel.z = direction.z * speed;
+        match behavior.state {
+            ZombieAiState::Idle => {
+                lin_vel.x = 0.0;
+                lin_vel.z = 0.0;
 
-        // Rotate to face movement direction
-        let horizontal_direction = Vec3::new(direction.x, 0.0, direction.z);
-        if horizontal_direction.length() > 0.01 {
-            let target_rotation =
-                Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
-            zombie_transform.rotation = target_rotation;
+                if behavior.timer.is_finished() {
+                    // Switch to Wandering
+                    behavior.state = ZombieAiState::Wandering;
+                    behavior.timer =
+                        Timer::from_seconds(rand::random::<f32>() * 2.0 + 2.0, TimerMode::Once); // Wander for 2-4 seconds
+
+                    // Pick a random direction
+                    behavior.wander_direction = Vec3::new(
+                        rand::random::<f32>() * 2.0 - 1.0,
+                        0.0,
+                        rand::random::<f32>() * 2.0 - 1.0,
+                    )
+                    .normalize_or_zero();
+                }
+            }
+            ZombieAiState::Wandering => {
+                lin_vel.x = behavior.wander_direction.x * speed;
+                lin_vel.z = behavior.wander_direction.z * speed;
+
+                // Rotate to face movement direction
+                let horizontal_direction = Vec3::new(
+                    behavior.wander_direction.x,
+                    0.0,
+                    behavior.wander_direction.z,
+                );
+                if horizontal_direction.length() > 0.01 {
+                    let target_rotation =
+                        Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
+                    zombie_transform.rotation = target_rotation;
+                }
+
+                if behavior.timer.is_finished() {
+                    // Switch to Idle
+                    behavior.state = ZombieAiState::Idle;
+                    behavior.timer =
+                        Timer::from_seconds(rand::random::<f32>() * 2.0 + 1.0, TimerMode::Once);
+                    // Idle for 1-3 seconds
+                }
+            }
+            _ => {} // Chasing is handled above
         }
     }
 }

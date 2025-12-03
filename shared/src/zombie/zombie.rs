@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 #[reflect(Component)]
 pub struct Zombie;
 
+pub const ZOMBIE_SPEED: f32 = 0.5;
+pub const ZOMBIE_ANIMATION_SPEED_MULTIPLIER: f32 = 4.0;
+
 #[cfg(feature = "client")]
 #[derive(Component)]
 pub struct ZombieAnimations {
@@ -58,7 +61,7 @@ impl Default for ZombieAnimationConfig {
             },
             walking_animation: AnimationClipConfig {
                 path: "zombie.glb#Animation11",
-                speed: 1.0,
+                speed: ZOMBIE_SPEED * ZOMBIE_ANIMATION_SPEED_MULTIPLIER,
                 repeat: true,
             },
             attacking_animation: AnimationClipConfig {
