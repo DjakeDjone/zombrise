@@ -56,15 +56,15 @@ fn main() {
                 spawn_zombies,
             ),
         )
-        // .add_systems(
-        //     FixedUpdate,
-        //     (
-        //         zombie_movement,
-        //         zombie_collision_damage,
-        //         update_damage_flash,
-        //         remove_dead_players,
-        //     ),
-        // )
+        .add_systems(
+            FixedUpdate,
+            (
+                zombie_movement,
+                zombie_collision_damage,
+                update_damage_flash,
+                remove_dead_players,
+            ),
+        )
         .run();
 }
 
@@ -153,7 +153,7 @@ fn server_event_system(mut commands: Commands, mut server_events: MessageReader<
                     AngularVelocity::ZERO,
                     LockedAxes::new().lock_rotation_x().lock_rotation_z(),
                     LinearDamping(0.5),
-                    AngularDamping(0.0),
+                    AngularDamping(20.0),
                 ));
             }
             ServerEvent::ClientDisconnected { client_id, reason } => {
@@ -168,8 +168,16 @@ fn handle_move_player(
     mut query: Query<(&PlayerOwner, &mut LinearVelocity, &mut Transform)>,
 ) {
     let speed = 5.0;
-    for FromClient { message: event, .. } in events.read() {
-        for (_, mut velocity, mut transform) in &mut query {
+    for FromClient {
+        message: event,
+        client_id,
+    } in events.read()
+    {
+        for (owner, mut velocity, mut transform) in &mut query {
+            // if owner.0 != *client_id {
+            //     continue;
+            // }
+
             let yaw_rotation = Quat::from_rotation_y(event.camera_yaw);
             let rotated_direction = yaw_rotation * event.direction;
 
@@ -222,20 +230,20 @@ fn spawn_zombies(mut commands: Commands, time: Res<Time>, mut timer: ResMut<Zomb
             AngularVelocity::ZERO,
             LockedAxes::new().lock_rotation_x().lock_rotation_z(),
             LinearDamping(0.5),
-            AngularDamping(0.0),
+            AngularDamping(20.0),
         ));
         println!("Zombie spawned at {}, {}", x, z);
     }
 }
 
 fn zombie_movement(
-    mut zombie_query: Query<(&mut LinearVelocity, &Transform), With<Zombie>>,
-    player_query: Query<&Transform, With<Player>>,
+    mut zombie_query: Query<(&mut LinearVelocity, &mut Transform), (With<Zombie>, Without<Player>)>,
+    player_query: Query<&Transform, (With<Player>, Without<Zombie>)>,
 ) {
     let speed = 2.0;
     let chase_range = 10.0;
 
-    for (mut lin_vel, zombie_transform) in &mut zombie_query {
+    for (mut lin_vel, mut zombie_transform) in &mut zombie_query {
         let mut nearest_player_pos: Option<Vec3> = None;
         let mut min_dist = f32::MAX;
 
@@ -255,6 +263,14 @@ fn zombie_movement(
                 let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
                 lin_vel.x = direction.x * speed;
                 lin_vel.z = direction.z * speed;
+
+                // Rotate to face player
+                let horizontal_direction = Vec3::new(direction.x, 0.0, direction.z);
+                if horizontal_direction.length() > 0.01 {
+                    let target_rotation =
+                        Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
+                    zombie_transform.rotation = target_rotation;
+                }
                 continue;
             }
         }
@@ -281,6 +297,14 @@ fn zombie_movement(
         // Move forward
         lin_vel.x = direction.x * speed;
         lin_vel.z = direction.z * speed;
+
+        // Rotate to face movement direction
+        let horizontal_direction = Vec3::new(direction.x, 0.0, direction.z);
+        if horizontal_direction.length() > 0.01 {
+            let target_rotation =
+                Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
+            zombie_transform.rotation = target_rotation;
+        }
     }
 }
 
@@ -378,16 +402,16 @@ fn update_damage_flash(mut query: Query<&mut DamageFlash>, time: Res<Time>) {
     }
 }
 
-// fn remove_dead_players(
-//     mut commands: Commands,
-//     player_query: Query<(Entity, &Health, &PlayerOwner), With<Player>>,
-//     mut
-// ) {
-//     for (entity, health, owner) in &player_query {
-//         if health.current <= 0.0 {
-//             println!("Removing dead player (Client ID: {:?})", owner.0);
-//             server.disconnect(owner.0);
-//             commands.entity(entity).despawn();
-//         }
-//     }
-// }
+fn remove_dead_players(
+    mut commands: Commands,
+    player_query: Query<(Entity, &Health, &PlayerOwner), With<Player>>,
+    mut server: ResMut<RenetServer>,
+) {
+    for (entity, health, owner) in &player_query {
+        if health.current <= 0.0 {
+            println!("Removing dead player (Client ID: {:?})", owner.0);
+            commands.entity(entity).despawn();
+            server.disconnect(owner.0);
+        }
+    }
+}

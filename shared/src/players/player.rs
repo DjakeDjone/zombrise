@@ -1,14 +1,14 @@
 use bevy::{
-    ecs::{
-        component::Component,
-        system::Res,
-    },
+    ecs::component::Component,
     math::Vec3,
     prelude::{Event, Message, Reflect},
 };
 
 #[cfg(feature = "client")]
-use bevy::input::{keyboard::KeyCode, ButtonInput};
+use bevy::{
+    ecs::system::Res,
+    input::{keyboard::KeyCode, ButtonInput},
+};
 use bevy_replicon_renet2::renet2::ClientId;
 use serde::{Deserialize, Serialize};
 
