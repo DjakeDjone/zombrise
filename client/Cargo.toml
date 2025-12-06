@@ -63,10 +63,3 @@ assets = [
 
 [package.metadata.deb.variants.zombrise]
 name = "zombrise"
-
-[[package.metadata.deb.desktop]]
-name = "Zombrise"
-comment = "Zombie survival game"
-exec = "/usr/bin/zombrise"
-terminal = false
-categories = "Game"
