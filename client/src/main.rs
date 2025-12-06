@@ -27,7 +27,9 @@ use zombrise_shared::players::player::{
 };
 use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
 use zombrise_shared::zombie::zombie::{
-    control_zombie_animation, setup_zombie_animation, update_zombie_animation_state, Zombie,
+    add_zombie_animation_events, control_zombie_animation, handle_zombie_animation_events,
+    setup_zombie_animation, update_zombie_animation_state, Zombie, ZombieAnimationEvent,
+    ZombieAnimationEventsState,
 };
 
 mod map;
@@ -76,6 +78,8 @@ fn main() {
             pitch: -0.3,
         })
         .init_resource::<PlayerDied>()
+        .init_resource::<ZombieAnimationEventsState>()
+        .add_message::<ZombieAnimationEvent>()
         .add_systems(Startup, setup_camera)
         .register_type::<Transform>()
         .register_type::<GlobalTransform>()
@@ -127,6 +131,8 @@ fn main() {
                 setup_zombie_animation,
                 update_zombie_animation_state,
                 control_zombie_animation,
+                add_zombie_animation_events,
+                handle_zombie_animation_events,
                 spawn_tree_visuals,
                 animate_player_damage,
                 display_health_bar,

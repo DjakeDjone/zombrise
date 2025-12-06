@@ -36,6 +36,7 @@ renet2_netcode = "0.11"
 bevy_simple_text_input = "0.12"
 arboard = "3.6"
 avian3d = "0.4"
+bevy-inspector-egui = "0.35.0"
 
 [package.metadata.deb]
 maintainer = "DjakeDjone"
