@@ -1,3 +1,5 @@
+#[cfg(feature = "client")]
+use bevy::animation::{AnimationEvent, AnimationEventTrigger};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -6,7 +8,8 @@ use serde::{Deserialize, Serialize};
 pub struct Zombie;
 
 pub const ZOMBIE_SPEED: f32 = 0.5;
-pub const ZOMBIE_ANIMATION_SPEED_MULTIPLIER: f32 = 4.0;
+// Reduced from 4.0 to 2.0 to match movement speed better and reduce "tear back" effect from root motion
+pub const ZOMBIE_ANIMATION_SPEED_MULTIPLIER: f32 = 2.0;
 
 #[cfg(feature = "client")]
 #[derive(Component)]
@@ -27,12 +30,34 @@ pub enum ZombieAnimationState {
 }
 
 #[cfg(feature = "client")]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Reflect, Serialize, Deserialize, Message)]
+pub enum ZombieAnimationEvent {
+    Footstep,
+    AttackHit,
+}
+
+#[cfg(feature = "client")]
+impl Event for ZombieAnimationEvent {
+    type Trigger<'a> = AnimationEventTrigger;
+}
+
+#[cfg(feature = "client")]
+impl AnimationEvent for ZombieAnimationEvent {}
+
+#[cfg(feature = "client")]
+#[derive(Resource, Default)]
+pub struct ZombieAnimationEventsState {
+    pub events_added: bool,
+}
+
+#[cfg(feature = "client")]
 impl Default for ZombieAnimationState {
     fn default() -> Self {
         Self::Idle
     }
 }
 
+#[cfg(feature = "client")]
 #[cfg(feature = "client")]
 pub struct ZombieAnimationConfig {
     pub model_path: &'static str,
@@ -216,6 +241,51 @@ pub fn control_zombie_animation(
                 } else {
                     player.play(animations.dying);
                 }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "client")]
+pub fn add_zombie_animation_events(
+    mut events_state: ResMut<ZombieAnimationEventsState>,
+    asset_server: Res<AssetServer>,
+    mut clips: ResMut<Assets<AnimationClip>>,
+) {
+    if events_state.events_added {
+        return;
+    }
+
+    let config = ZombieAnimationConfig::default();
+
+    // Check if clips are loaded
+    let walking_handle = asset_server.load(config.walking_animation.path);
+    let attacking_handle = asset_server.load(config.attacking_animation.path);
+
+    if let Some(clip) = clips.get_mut(&walking_handle) {
+        // Add footsteps at 0.0s and 0.5s (assuming 1s loop for simplicity, adjust as needed)
+        clip.add_event(0.2, ZombieAnimationEvent::Footstep);
+        clip.add_event(0.7, ZombieAnimationEvent::Footstep);
+        events_state.events_added = true; // Mark as done (at least for walking)
+        println!("Added footstep events to walking animation");
+    }
+
+    if let Some(clip) = clips.get_mut(&attacking_handle) {
+        // Add attack hit at 0.5s
+        clip.add_event(0.5, ZombieAnimationEvent::AttackHit);
+        println!("Added attack hit event to attacking animation");
+    }
+}
+
+#[cfg(feature = "client")]
+pub fn handle_zombie_animation_events(mut animation_events: MessageReader<ZombieAnimationEvent>) {
+    for event in animation_events.read() {
+        match event {
+            ZombieAnimationEvent::Footstep => {
+                println!("Zombie Footstep");
+            }
+            ZombieAnimationEvent::AttackHit => {
+                println!("Zombie Attack Hit");
             }
         }
     }
