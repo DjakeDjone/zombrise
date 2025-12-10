@@ -27,7 +27,8 @@ use zombrise_shared::players::player::{
 };
 use zombrise_shared::players::player_animation::{
     control_player_animation, setup_player_animation, trigger_player_attack_animation,
-    update_player_animation_state, update_player_attack_timer, PlayerAttacking,
+    update_player_animation_state, update_player_attack_timer, update_player_idle_variations,
+    PlayerAttacking,
 };
 use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
 use zombrise_shared::zombie::zombie::{
@@ -164,6 +165,7 @@ fn main() {
                 control_player_animation,
                 trigger_player_attack_animation,
                 update_player_attack_timer,
+                update_player_idle_variations,
                 animate_player_damage,
                 display_health_bar,
                 detect_player_death,
