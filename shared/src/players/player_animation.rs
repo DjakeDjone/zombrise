@@ -1,6 +1,8 @@
 #[cfg(feature = "client")]
 use bevy::animation::AnimationPlayer;
 use bevy::prelude::*;
+#[cfg(feature = "client")]
+use std::time::Duration;
 
 /// Tracks if the player is currently attacking (for animation purposes)
 #[cfg(feature = "client")]
@@ -166,24 +168,29 @@ pub fn setup_player_animation(
             graph.root,
         );
 
-        commands
-            .entity(entity)
-            .insert(AnimationGraphHandle(graphs.add(graph)));
-        commands.entity(entity).insert(PlayerAnimations {
-            idle: idle_node,
-            idle_nervous: idle_nervous_node,
-            walking: walking_node,
-            attacking: attacking_node,
-        });
-        commands.entity(entity).insert(PlayerIdleTimer::default());
-        commands
-            .entity(entity)
-            .insert(PlayerAnimationState::default());
-        // Link this AnimationPlayer to its root Player entity
-        commands.entity(entity).insert(PlayerRoot(player_entity));
+        let graph_handle = graphs.add(graph);
 
-        // Start with idle animation
-        player.play(idle_node).repeat();
+        // Create AnimationTransitions to manage smooth blending between animations
+        let mut transitions = AnimationTransitions::new();
+
+        // Start with idle animation via AnimationTransitions
+        transitions
+            .play(&mut player, idle_node, Duration::ZERO)
+            .repeat();
+
+        commands
+            .entity(entity)
+            .insert(AnimationGraphHandle(graph_handle))
+            .insert(PlayerAnimations {
+                idle: idle_node,
+                idle_nervous: idle_nervous_node,
+                walking: walking_node,
+                attacking: attacking_node,
+            })
+            .insert(PlayerIdleTimer::default())
+            .insert(PlayerAnimationState::default())
+            .insert(PlayerRoot(player_entity))
+            .insert(transitions);
     }
 }
 
@@ -233,12 +240,17 @@ pub fn update_player_animation_state(
 #[derive(Component, Default, Clone, Copy, PartialEq, Eq)]
 pub struct LastPlayedPlayerAnimation(Option<PlayerAnimationState>);
 
+/// Transition duration for blending between animations
+#[cfg(feature = "client")]
+const ANIMATION_TRANSITION_DURATION: Duration = Duration::from_millis(200);
+
 #[cfg(feature = "client")]
 pub fn control_player_animation(
     mut commands: Commands,
     mut animation_players: Query<(
         Entity,
         &mut AnimationPlayer,
+        &mut AnimationTransitions,
         &PlayerAnimations,
         &PlayerAnimationState,
         Option<&LastPlayedPlayerAnimation>,
@@ -246,7 +258,9 @@ pub fn control_player_animation(
 ) {
     let config = PlayerAnimationConfig::default();
 
-    for (entity, mut player, animations, state, last_played) in &mut animation_players {
+    for (entity, mut player, mut transitions, animations, state, last_played) in
+        &mut animation_players
+    {
         // Check if we need to play this animation
         let should_play = match last_played {
             Some(last) => last.0 != Some(*state),
@@ -259,33 +273,41 @@ pub fn control_player_animation(
 
         println!("Playing player animation: {:?}", state);
 
-        // Stop all current animations to ensure clean transition
-        player.stop_all();
-
+        // Use AnimationTransitions for smooth blending between animations
         match *state {
             PlayerAnimationState::Idle => {
+                let active =
+                    transitions.play(&mut player, animations.idle, ANIMATION_TRANSITION_DURATION);
                 if config.idle_animation.repeat {
-                    player.play(animations.idle).repeat();
-                } else {
-                    player.play(animations.idle);
+                    active.repeat();
                 }
             }
             PlayerAnimationState::IdleNervous => {
                 // Play once - doesn't repeat
-                player.play(animations.idle_nervous);
+                transitions.play(
+                    &mut player,
+                    animations.idle_nervous,
+                    ANIMATION_TRANSITION_DURATION,
+                );
             }
             PlayerAnimationState::Walking => {
+                let active = transitions.play(
+                    &mut player,
+                    animations.walking,
+                    ANIMATION_TRANSITION_DURATION,
+                );
                 if config.walking_animation.repeat {
-                    player.play(animations.walking).repeat();
-                } else {
-                    player.play(animations.walking);
+                    active.repeat();
                 }
             }
             PlayerAnimationState::Attacking => {
+                let active = transitions.play(
+                    &mut player,
+                    animations.attacking,
+                    ANIMATION_TRANSITION_DURATION,
+                );
                 if config.attacking_animation.repeat {
-                    player.play(animations.attacking).repeat();
-                } else {
-                    player.play(animations.attacking);
+                    active.repeat();
                 }
             }
         }

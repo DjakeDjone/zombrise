@@ -2,6 +2,8 @@
 use bevy::animation::{AnimationEvent, AnimationEventTrigger};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "client")]
+use std::time::Duration;
 
 #[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default)]
 #[reflect(Component)]
@@ -185,24 +187,29 @@ pub fn setup_zombie_animation(
             graph.root,
         );
 
-        commands
-            .entity(entity)
-            .insert(AnimationGraphHandle(graphs.add(graph)));
-        commands.entity(entity).insert(ZombieAnimations {
-            idle: idle_node,
-            walking: walking_node,
-            running: running_node,
-            attacking: attacking_node,
-            dying: dying_node,
-        });
-        commands
-            .entity(entity)
-            .insert(ZombieAnimationState::default());
-        // Link this AnimationPlayer to its root Zombie entity
-        commands.entity(entity).insert(ZombieRoot(zombie_entity));
+        let graph_handle = graphs.add(graph);
 
-        // Start with idle animation
-        player.play(idle_node).repeat();
+        // Create AnimationTransitions to manage smooth blending between animations
+        let mut transitions = AnimationTransitions::new();
+
+        // Start with idle animation via AnimationTransitions
+        transitions
+            .play(&mut player, idle_node, Duration::ZERO)
+            .repeat();
+
+        commands
+            .entity(entity)
+            .insert(AnimationGraphHandle(graph_handle))
+            .insert(ZombieAnimations {
+                idle: idle_node,
+                walking: walking_node,
+                running: running_node,
+                attacking: attacking_node,
+                dying: dying_node,
+            })
+            .insert(ZombieAnimationState::default())
+            .insert(ZombieRoot(zombie_entity))
+            .insert(transitions);
     }
 }
 
@@ -268,11 +275,16 @@ pub fn update_zombie_animation_state(
     }
 }
 
+/// Transition duration for blending between animations
+#[cfg(feature = "client")]
+const ANIMATION_TRANSITION_DURATION: Duration = Duration::from_millis(200);
+
 #[cfg(feature = "client")]
 pub fn control_zombie_animation(
     mut animation_players: Query<
         (
             &mut AnimationPlayer,
+            &mut AnimationTransitions,
             &ZombieAnimations,
             &ZombieAnimationState,
         ),
@@ -281,44 +293,51 @@ pub fn control_zombie_animation(
 ) {
     let config = ZombieAnimationConfig::default();
 
-    for (mut player, animations, state) in &mut animation_players {
-        // Stop all current animations to ensure clean transition
-        player.stop_all();
-
+    for (mut player, mut transitions, animations, state) in &mut animation_players {
+        // Use AnimationTransitions for smooth blending between animations
         match *state {
             ZombieAnimationState::Idle => {
+                let active =
+                    transitions.play(&mut player, animations.idle, ANIMATION_TRANSITION_DURATION);
                 if config.idle_animation.repeat {
-                    player.play(animations.idle).repeat();
-                } else {
-                    player.play(animations.idle);
+                    active.repeat();
                 }
             }
             ZombieAnimationState::Walking => {
+                let active = transitions.play(
+                    &mut player,
+                    animations.walking,
+                    ANIMATION_TRANSITION_DURATION,
+                );
                 if config.walking_animation.repeat {
-                    player.play(animations.walking).repeat();
-                } else {
-                    player.play(animations.walking);
+                    active.repeat();
                 }
             }
             ZombieAnimationState::Running => {
+                let active = transitions.play(
+                    &mut player,
+                    animations.running,
+                    ANIMATION_TRANSITION_DURATION,
+                );
                 if config.running_animation.repeat {
-                    player.play(animations.running).repeat();
-                } else {
-                    player.play(animations.running);
+                    active.repeat();
                 }
             }
             ZombieAnimationState::Attacking => {
+                let active = transitions.play(
+                    &mut player,
+                    animations.attacking,
+                    ANIMATION_TRANSITION_DURATION,
+                );
                 if config.attacking_animation.repeat {
-                    player.play(animations.attacking).repeat();
-                } else {
-                    player.play(animations.attacking);
+                    active.repeat();
                 }
             }
             ZombieAnimationState::Dying => {
+                let active =
+                    transitions.play(&mut player, animations.dying, ANIMATION_TRANSITION_DURATION);
                 if config.dying_animation.repeat {
-                    player.play(animations.dying).repeat();
-                } else {
-                    player.play(animations.dying);
+                    active.repeat();
                 }
             }
         }
