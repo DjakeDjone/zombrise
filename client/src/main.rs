@@ -374,13 +374,23 @@ fn spawn_player_visuals(
 ) {
     for entity in query.iter() {
         commands.entity(entity).insert((
-            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-            MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
+            PlayerVisualsSpawned,
             Visibility::default(),
             InheritedVisibility::default(),
             ViewVisibility::default(),
-            PlayerVisualsSpawned,
         ));
+
+        commands.entity(entity).with_children(|parent| {
+            parent.spawn((
+                Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
+                Transform::from_translation(Vec3::new(0.0, -0.75, 0.0)),
+                Visibility::default(),
+                InheritedVisibility::default(),
+                ViewVisibility::default(),
+                PlayerVisualMesh,
+            ));
+        });
     }
 }
 
@@ -397,13 +407,16 @@ fn spawn_zombie_visuals(
             ViewVisibility::default(),
         ));
 
+        // Spawn the zombie model as a child with offset to align with capsule collider
+        // Zombie capsule: radius=0.3, half_height=0.8, so offset visual down by half_height
         commands.entity(entity).with_children(|parent| {
             parent.spawn((
                 SceneRoot(asset_server.load("zombie.glb#Scene0")),
                 Visibility::default(),
                 InheritedVisibility::default(),
                 ViewVisibility::default(),
-                Transform::from_rotation(Quat::from_rotation_y(std::f32::consts::PI)),
+                Transform::from_translation(Vec3::new(0.0, -0.75, 0.0))
+                    .with_rotation(Quat::from_rotation_y(std::f32::consts::PI)),
                 GlobalTransform::default(),
             ));
         });
@@ -485,32 +498,34 @@ fn handle_lock_key(
 }
 
 fn animate_player_damage(
-    mut player_query: Query<
-        (
-            &DamageFlash,
-            &MeshMaterial3d<StandardMaterial>,
-            &PlayerOwner,
-        ),
+    player_query: Query<
+        (&DamageFlash, &PlayerOwner, &Children),
         (With<Player>, Changed<DamageFlash>),
     >,
+    visual_mesh_query: Query<&MeshMaterial3d<StandardMaterial>, With<PlayerVisualMesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     my_client_id: Res<MyClientId>,
 ) {
-    for (damage_flash, material_handle, owner) in player_query.iter_mut() {
+    for (damage_flash, owner, children) in player_query.iter() {
         // Only animate our own player
         if owner.0 == my_client_id.0 {
-            if let Some(material) = materials.get_mut(material_handle) {
-                if damage_flash.timer > 0.0 {
-                    // Flash red when damaged
-                    let flash_intensity = (damage_flash.timer / 0.3).clamp(0.0, 1.0);
-                    material.base_color = Color::srgb(
-                        0.8 + 0.2 * flash_intensity,
-                        0.7 - 0.5 * flash_intensity,
-                        0.6 - 0.4 * flash_intensity,
-                    );
-                } else {
-                    // Reset to normal color
-                    material.base_color = Color::srgb(0.8, 0.7, 0.6);
+            // Find the visual mesh child
+            for child in children.iter() {
+                if let Ok(material_handle) = visual_mesh_query.get(child) {
+                    if let Some(material) = materials.get_mut(material_handle) {
+                        if damage_flash.timer > 0.0 {
+                            // Flash red when damaged
+                            let flash_intensity = (damage_flash.timer / 0.3).clamp(0.0, 1.0);
+                            material.base_color = Color::srgb(
+                                0.8 + 0.2 * flash_intensity,
+                                0.7 - 0.5 * flash_intensity,
+                                0.6 - 0.4 * flash_intensity,
+                            );
+                        } else {
+                            // Reset to normal color
+                            material.base_color = Color::srgb(0.8, 0.7, 0.6);
+                        }
+                    }
                 }
             }
         }
@@ -520,6 +535,9 @@ fn animate_player_damage(
 // Marker components to track visual spawning
 #[derive(Component)]
 struct PlayerVisualsSpawned;
+
+#[derive(Component)]
+struct PlayerVisualMesh;
 
 #[derive(Component)]
 struct ZombieVisualsSpawned;
