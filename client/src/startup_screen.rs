@@ -8,6 +8,7 @@ use bevy_simple_text_input::{
 pub enum AppState {
     #[default]
     StartupScreen,
+    Loading,
     Playing,
 }
 
@@ -215,7 +216,7 @@ pub fn handle_startup_ui(
                 if let Ok(input_value) = input_query.single() {
                     server_config.url = input_value.0.clone();
                 }
-                next_state.set(AppState::Playing);
+                next_state.set(AppState::Loading);
             }
             Interaction::Hovered => {
                 *color = Color::srgb(0.25, 0.7, 0.25).into();
