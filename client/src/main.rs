@@ -25,6 +25,10 @@ use std::{
 use zombrise_shared::players::player::{
     handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
 };
+use zombrise_shared::players::player_animation::{
+    control_player_animation, setup_player_animation, trigger_player_attack_animation,
+    update_player_animation_state, update_player_attack_timer, PlayerAttacking,
+};
 use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
 use zombrise_shared::zombie::zombie::{
     add_zombie_animation_events, control_zombie_animation, handle_zombie_animation_events,
@@ -149,6 +153,17 @@ fn main() {
                 add_zombie_animation_events,
                 handle_zombie_animation_events,
                 spawn_tree_visuals,
+            )
+                .run_if(in_state(AppState::Playing)),
+        )
+        .add_systems(
+            Update,
+            (
+                setup_player_animation,
+                update_player_animation_state,
+                control_player_animation,
+                trigger_player_attack_animation,
+                update_player_attack_timer,
                 animate_player_damage,
                 display_health_bar,
                 detect_player_death,
@@ -384,25 +399,27 @@ fn spawn_tree_visuals(
 fn spawn_player_visuals(
     mut commands: Commands,
     query: Query<Entity, (Added<Player>, Without<PlayerVisualsSpawned>)>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
 ) {
     for entity in query.iter() {
         commands.entity(entity).insert((
             PlayerVisualsSpawned,
+            PlayerAttacking::default(),
             Visibility::default(),
             InheritedVisibility::default(),
             ViewVisibility::default(),
         ));
 
+        // Spawn the player model as a child with offset to align with capsule collider
         commands.entity(entity).with_children(|parent| {
             parent.spawn((
-                Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-                MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
-                Transform::from_translation(Vec3::new(0.0, -0.75, 0.0)),
+                SceneRoot(asset_server.load("player.glb#Scene0")),
                 Visibility::default(),
                 InheritedVisibility::default(),
                 ViewVisibility::default(),
+                Transform::from_translation(Vec3::new(0.0, -0.75, 0.0))
+                    .with_rotation(Quat::from_rotation_y(std::f32::consts::PI)),
+                GlobalTransform::default(),
                 PlayerVisualMesh,
             ));
         });
