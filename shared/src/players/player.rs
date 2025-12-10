@@ -97,16 +97,3 @@ pub struct CameraRotation {
     pub yaw: f32,
     pub pitch: f32,
 }
-
-// pub fn camera_follow(
-//     player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
-//     mut camera_query: Query<&mut Transform, With<MainCamera>>,
-// ) {
-//     if let Ok(player_transform) = player_query.single() {
-//         if let Ok(mut camera_transform) = camera_query.single_mut() {
-//             let offset = Vec3::new(0.0, 5.0, 10.0);
-//             camera_transform.translation = player_transform.translation + offset;
-//             camera_transform.look_at(player_transform.translation, Vec3::Y);
-//         }
-//     }
-// }

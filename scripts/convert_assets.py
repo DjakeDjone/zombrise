@@ -5,17 +5,17 @@ import sys
 # Usage: blender --background --python scripts/convert_assets.py
 
 def convert_assets():
-    # Directory setup
+    # Setup dirs
     script_dir = os.path.dirname(os.path.abspath(__file__))
     assets_dir = os.path.abspath(os.path.join(script_dir, "assets_to_convert"))
     output_file = os.path.join(assets_dir, "zombie.glb")
 
     print(f"Scanning {assets_dir} for FBX files...")
 
-    # Clear the scene
+    # Clear scene
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
-    # Find FBX files
+    # Find FBXs
     fbx_files = [f for f in os.listdir(assets_dir) if f.lower().endswith(".fbx")]
     fbx_files.sort()
 
@@ -23,23 +23,23 @@ def convert_assets():
         print("No FBX files found.")
         return
 
-    # We need to keep track of the main armature object
+    # Track main armature
     main_armature = None
 
-    # Import all FBX files
+    # Import FBXs
     for i, fbx in enumerate(fbx_files):
         path = os.path.join(assets_dir, fbx)
         print(f"Importing: {fbx}")
         
         # Import FBX
-        # force_connect_children=True helps with bone hierarchy in some cases
-        # automatic_bone_orientation=True is usually good for FBX->GLTF
+        # force_connect useful
+        # auto_bone good for GLTF
         bpy.ops.import_scene.fbx(filepath=path, automatic_bone_orientation=True)
 
         # Get the imported objects
         imported_objects = [obj for obj in bpy.context.selected_objects]
         
-        # Find the armature in the imported objects
+        # Find armature
         armature = None
         for obj in imported_objects:
             if obj.type == 'ARMATURE':
@@ -50,7 +50,7 @@ def convert_assets():
             print(f"Warning: No armature found in {fbx}")
             continue
 
-        # Extract animation name from filename (e.g., "Zombie Walk.fbx" -> "Zombie Walk")
+        # Extract anim name
         anim_name = os.path.splitext(fbx)[0]
         
         if armature.animation_data and armature.animation_data.action:
@@ -58,25 +58,22 @@ def convert_assets():
             action.name = anim_name
             print(f"  Found action: {action.name}")
             
-            # If this is the first file, keep it as the main armature
+            # First file is main
             if i == 0:
                 main_armature = armature
-                # Ensure the action is stashed/kept
+                # Stash action
                 if not main_armature.animation_data:
                     main_armature.animation_data_create()
                 
-                # Push the action to NLA track to ensure it's exported
+                # Push to NLA
                 track = main_armature.animation_data.nla_tracks.new()
                 track.name = action.name
                 track.strips.new(action.name, int(action.frame_range[0]), action)
                 
             else:
-                # For subsequent files, we just want the action
-                # We can delete the imported objects, but keep the action
-                # The action is already in bpy.data.actions
-                
-                # Assign the action to the main armature to ensure compatibility (optional but good check)
-                # And push it to the main armature's NLA tracks
+                # Subsequent files: keep action only
+
+                # Assign action to main
                 if main_armature:
                     if not main_armature.animation_data:
                         main_armature.animation_data_create()
@@ -88,15 +85,15 @@ def convert_assets():
                     except Exception as e:
                         print(f"  Error adding NLA strip for {action.name}: {e}")
 
-                # Delete the imported objects from this file (except the action)
+                # Delete imported objects
                 bpy.ops.object.delete()
         else:
             print(f"  No animation found in {fbx}")
-            # If it's the first file and has no animation, we still keep it as the base mesh
+            # First file: keep even if no anim
             if i == 0:
                 main_armature = armature
 
-    # Select the main armature and its children (mesh) for export
+    # Select for export
     if main_armature:
         # Deselect all
         bpy.ops.object.select_all(action='DESELECT')
@@ -114,9 +111,9 @@ def convert_assets():
             filepath=output_file,
             export_format='GLB',
             export_yup=True,
-            # Ensure we export all NLA tracks as animations
+            # Export NLA
             export_nla_strips=True, 
-            # export_animations=True is default
+            # export_animations=True default
         )
         print("Conversion complete.")
     else:

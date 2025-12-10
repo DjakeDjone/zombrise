@@ -4,15 +4,12 @@ use bevy::prelude::*;
 
 use crate::startup_screen::AppState;
 
-/// Marker component for loading screen UI elements
 #[derive(Component)]
 pub struct LoadingScreenMarker;
 
-/// Component for the loading progress bar fill
 #[derive(Component)]
 pub struct LoadingProgressBar;
 
-/// Component for the loading status text
 #[derive(Component)]
 pub struct LoadingStatusText;
 
@@ -30,11 +27,11 @@ pub struct LoadingProgress {
     pub total_assets: usize,
 }
 
-/// System to start loading assets when entering the Loading state
+/// Starts asset loading
 pub fn start_loading_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
     println!("=== START_LOADING_ASSETS ===");
 
-    // Load all game assets
+    // Load assets
     let zombie_model: Handle<Gltf> = asset_server.load("zombie.glb");
 
     commands.insert_resource(GameAssets {
@@ -44,13 +41,13 @@ pub fn start_loading_assets(mut commands: Commands, asset_server: Res<AssetServe
 
     commands.insert_resource(LoadingProgress {
         assets_loaded: 0,
-        total_assets: 1, // Currently just the zombie model
+        total_assets: 1,
     });
 
     println!("=== ASSETS QUEUED FOR LOADING ===");
 }
 
-/// System to display the loading screen UI
+/// Displays loading screen
 pub fn show_loading_screen(mut commands: Commands) {
     println!("=== SHOW_LOADING_SCREEN ===");
 
@@ -68,7 +65,6 @@ pub fn show_loading_screen(mut commands: Commands) {
             LoadingScreenMarker,
         ))
         .with_children(|parent| {
-            // Loading title
             parent.spawn((
                 Text::new("Loading..."),
                 TextFont {
@@ -94,7 +90,6 @@ pub fn show_loading_screen(mut commands: Commands) {
                     BorderColor::all(Color::srgb(0.4, 0.4, 0.5)),
                 ))
                 .with_children(|bar_parent| {
-                    // Loading bar fill
                     bar_parent.spawn((
                         Node {
                             width: Val::Percent(0.0),
@@ -106,7 +101,6 @@ pub fn show_loading_screen(mut commands: Commands) {
                     ));
                 });
 
-            // Status text
             parent.spawn((
                 Text::new("Preparing assets..."),
                 TextFont {
@@ -125,7 +119,7 @@ pub fn show_loading_screen(mut commands: Commands) {
     println!("=== SHOW_LOADING_SCREEN COMPLETE ===");
 }
 
-/// System to check loading progress and update UI
+/// Updates loading progress
 pub fn check_loading_progress(
     asset_server: Res<AssetServer>,
     mut game_assets: ResMut<GameAssets>,
@@ -138,7 +132,7 @@ pub fn check_loading_progress(
         return;
     }
 
-    // Check the load state of our assets
+    // Check asset states
     let zombie_state = asset_server.get_load_state(&game_assets.zombie_model);
 
     let mut loaded_count = 0;
@@ -165,7 +159,6 @@ pub fn check_loading_progress(
 
     progress.assets_loaded = loaded_count;
 
-    // Update progress bar
     let progress_percent = if progress.total_assets > 0 {
         (progress.assets_loaded as f32 / progress.total_assets as f32) * 100.0
     } else {
@@ -176,12 +169,10 @@ pub fn check_loading_progress(
         node.width = Val::Percent(progress_percent);
     }
 
-    // Update status text
     if let Ok(mut text) = status_text_query.single_mut() {
         text.0 = current_status.to_string();
     }
 
-    // Check if all assets are loaded
     if progress.assets_loaded >= progress.total_assets {
         println!("=== ALL ASSETS LOADED, TRANSITIONING TO PLAYING ===");
         game_assets.loading_complete = true;
@@ -189,7 +180,7 @@ pub fn check_loading_progress(
     }
 }
 
-/// System to clean up loading screen when exiting
+/// Cleanup loading screen
 pub fn cleanup_loading_screen(
     mut commands: Commands,
     loading_screen_query: Query<Entity, With<LoadingScreenMarker>>,

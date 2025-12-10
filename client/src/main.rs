@@ -206,10 +206,7 @@ fn setup_client(
         .to_socket_addrs()
         .expect("Failed to resolve server address")
         .find(|addr| addr.is_ipv4()) // Prefer IPv4
-        .or_else(|| {
-            // Fallback to any address if no IPv4 found
-            server_config.url.to_socket_addrs().ok()?.next()
-        })
+        .or_else(|| server_config.url.to_socket_addrs().ok()?.next())
         .expect("No address found for server");
 
     println!("Connecting to server at: {}", server_addr);
@@ -239,9 +236,9 @@ fn setup_camera(mut commands: Commands) {
         .spawn((
             Camera3d::default(),
             Camera {
-                order: 0,                                                             // Render first
-                is_active: false, // Inactive during startup screen
-                clear_color: ClearColorConfig::Custom(Color::srgb(0.64, 0.74, 0.88)), // Sky color
+                order: 0,
+                is_active: false,
+                clear_color: ClearColorConfig::Custom(Color::srgb(0.64, 0.74, 0.88)),
                 ..default()
             },
             Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -254,7 +251,7 @@ fn setup_camera(mut commands: Commands) {
         .spawn((
             Camera2d,
             Camera {
-                order: 1, // Render after 3D camera
+                order: 1,
                 clear_color: ClearColorConfig::Custom(Color::srgb(0.15, 0.15, 0.2)),
                 ..default()
             },
@@ -273,19 +270,19 @@ fn activate_game_cameras(
     mut camera_3d_query: Query<&mut Camera, With<MainCamera>>,
     mut camera_2d_query: Query<&mut Camera, (With<Camera2d>, Without<MainCamera>)>,
 ) {
-    // Activate the 3D camera
+    // Activate 3D camera
     if let Ok(mut camera) = camera_3d_query.single_mut() {
         camera.is_active = true;
     }
 
-    // Change UI camera to transparent mode so it doesn't clear the 3D world
+    // Set UI transparent
     if let Ok(mut camera) = camera_2d_query.single_mut() {
         camera.clear_color = ClearColorConfig::None;
     }
 }
 
 fn setup(mut commands: Commands) {
-    // Directional light (Sun) with higher illuminance
+    // Sun light
     commands.spawn((
         DirectionalLight {
             shadows_enabled: true,
@@ -319,7 +316,7 @@ fn spawn_map_visuals(
             ViewVisibility::default(),
             MapVisualsSpawned,
         ));
-        // landscape without trees
+
         spawn_snow_landscape(
             &mut commands,
             &mut meshes,
@@ -412,7 +409,7 @@ fn spawn_player_visuals(
             ViewVisibility::default(),
         ));
 
-        // Spawn the player model as a child with offset to align with capsule collider
+        // Offset model
         commands.entity(entity).with_children(|parent| {
             parent.spawn((
                 SceneRoot(asset_server.load("player.glb#Scene0")),
@@ -441,8 +438,7 @@ fn spawn_zombie_visuals(
             ViewVisibility::default(),
         ));
 
-        // Spawn the zombie model as a child with offset to align with capsule collider
-        // Zombie capsule: radius=0.3, half_height=0.8, so offset visual down by half_height
+        // Offset model to align with collider
         commands.entity(entity).with_children(|parent| {
             parent.spawn((
                 SceneRoot(asset_server.load("zombie.glb#Scene0")),
@@ -474,7 +470,6 @@ fn camera_follow(
                 // Calculate the offset vector from yaw and pitch
                 let offset = Vec3::new(
                     distance * pitch.cos() * yaw.sin(),
-                    // distance * pitch.sin(),
                     2.0,
                     distance * pitch.cos() * yaw.cos(),
                 );
@@ -491,7 +486,7 @@ fn handle_camera_rotation(
     mut camera_rotation: ResMut<CameraRotation>,
 ) {
     const SENSITIVITY: f32 = 0.003;
-    const PITCH_LIMIT: f32 = 1.5; // Limit pitch to avoid flipping
+    const PITCH_LIMIT: f32 = 1.5;
 
     for motion in mouse_motion.read() {
         camera_rotation.yaw -= motion.delta.x * SENSITIVITY;
@@ -541,14 +536,13 @@ fn animate_player_damage(
     my_client_id: Res<MyClientId>,
 ) {
     for (damage_flash, owner, children) in player_query.iter() {
-        // Only animate our own player
         if owner.0 == my_client_id.0 {
             // Find the visual mesh child
             for child in children.iter() {
                 if let Ok(material_handle) = visual_mesh_query.get(child) {
                     if let Some(material) = materials.get_mut(material_handle) {
                         if damage_flash.timer > 0.0 {
-                            // Flash red when damaged
+                            // Flash red
                             let flash_intensity = (damage_flash.timer / 0.3).clamp(0.0, 1.0);
                             material.base_color = Color::srgb(
                                 0.8 + 0.2 * flash_intensity,
@@ -556,7 +550,6 @@ fn animate_player_damage(
                                 0.6 - 0.4 * flash_intensity,
                             );
                         } else {
-                            // Reset to normal color
                             material.base_color = Color::srgb(0.8, 0.7, 0.6);
                         }
                     }
@@ -566,7 +559,6 @@ fn animate_player_damage(
     }
 }
 
-// Marker components to track visual spawning
 #[derive(Component)]
 struct PlayerVisualsSpawned;
 
@@ -582,7 +574,6 @@ struct MapVisualsSpawned;
 #[derive(Component)]
 struct TreeVisualsSpawned;
 
-// Component to mark the health UI elements
 #[derive(Component)]
 struct HealthBarUI;
 
@@ -620,9 +611,7 @@ fn display_health_bar(
         return;
     }
 
-    // If we have health data and no UI exists, create it
     if our_health.is_some() && health_ui_query.is_empty() {
-        // Create health bar UI
         commands
             .spawn((
                 Node {
@@ -637,7 +626,6 @@ fn display_health_bar(
                 HealthBarUI,
             ))
             .with_children(|parent| {
-                // Health text
                 parent.spawn((
                     Text::new("Health: 100/100 (100%)"),
                     TextFont {
@@ -652,7 +640,6 @@ fn display_health_bar(
                     HealthText,
                 ));
 
-                // Health bar background
                 parent
                     .spawn((
                         Node {
@@ -662,10 +649,8 @@ fn display_health_bar(
                             ..default()
                         },
                         BackgroundColor(Color::srgb(0.2, 0.2, 0.2).into()),
-                        // BorderColor::all(Color::srgb(0.8, 0.8, 0.8).into()),
                     ))
                     .with_children(|parent| {
-                        // Health bar fill
                         parent.spawn((
                             Node {
                                 width: Val::Percent(100.0),
@@ -682,13 +667,13 @@ fn display_health_bar(
     if let Some(health) = our_health {
         let health_percent = (health.current / health.max * 100.0).max(0.0);
 
-        // Determine color based on health percentage
+        // Color from health
         let bar_color = if health_percent > 60.0 {
-            Color::srgb(0.2, 0.8, 0.2) // Green
+            Color::srgb(0.2, 0.8, 0.2)
         } else if health_percent > 30.0 {
-            Color::srgb(1.0, 0.8, 0.0) // Yellow
+            Color::srgb(1.0, 0.8, 0.0)
         } else {
-            Color::srgb(1.0, 0.2, 0.2) // Red
+            Color::srgb(1.0, 0.2, 0.2)
         };
 
         // Update health bar fill width and color
@@ -697,20 +682,18 @@ fn display_health_bar(
             *bg_color = bar_color.into();
         }
 
-        // Update health text
         if let Ok((mut text, mut text_color)) = health_text_query.single_mut() {
             text.0 = format!(
                 "Health: {:.0}/{:.0} ({:.0}%)",
                 health.current, health.max, health_percent
             );
 
-            // Change text color based on health percentage
             text_color.0 = if health_percent > 60.0 {
-                Color::srgb(0.2, 1.0, 0.2) // Green
+                Color::srgb(0.2, 1.0, 0.2)
             } else if health_percent > 30.0 {
-                Color::srgb(1.0, 0.8, 0.0) // Yellow
+                Color::srgb(1.0, 0.8, 0.0)
             } else {
-                Color::srgb(1.0, 0.2, 0.2) // Red
+                Color::srgb(1.0, 0.2, 0.2)
             };
         }
     }

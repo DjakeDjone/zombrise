@@ -1,15 +1,15 @@
 use bevy::prelude::*;
 
-/// Readable settings bundle to tweak the generated snow landscape.
+/// Snow landscape settings
 #[derive(Debug, Clone, Copy)]
 pub struct SnowLandscapeConfig {
-    /// Radius of the circular snow platform (in world units).
+    /// Radius of snow platform
     pub radius: f32,
-    /// Thickness of the packed snow disc.
+    /// Thickness of snow disc
     pub base_height: f32,
-    /// Radius of the frozen pond feature.
+    /// Radius of frozen pond
     pub ice_radius: f32,
-    /// Ambient brightness applied to the scene.
+    /// Ambient brightness
     pub ambient_brightness: f32,
 }
 
@@ -24,8 +24,7 @@ impl Default for SnowLandscapeConfig {
     }
 }
 
-/// Spawns a stylized snow landscape: a circular plateau, gentle snow mounds,
-/// a frozen pond, scattered boulders, evergreen trees, and ice shards.
+/// Spawns snow landscape
 pub fn spawn_snow_landscape(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -52,7 +51,6 @@ pub fn spawn_snow_landscape(
     });
 
     spawn_plateau(commands, meshes, &snow_material, config, parent);
-    // Trees are now spawned by the server, not here
 
     spawn_frozen_pond(commands, meshes, &ice_material, config, parent);
 }
@@ -94,8 +92,7 @@ fn spawn_frozen_pond(
     parent: Entity,
 ) {
     let thickness = config.base_height * 0.45;
-    // Position the pond so its top sits at the plateau top (y = 0).
-    // Previously used config.base_height which could place the pond below the plateau.
+    // Align pond top to plateau
     let pond_center_y = -thickness * 0.5;
 
     commands

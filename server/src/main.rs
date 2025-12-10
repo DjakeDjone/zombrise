@@ -122,7 +122,7 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
         Replicated,
         Transform::from_xyz(0.0, -0.05, 0.0),
         RigidBody::Static,
-        Collider::cuboid(56.0, 0.1, 56.0), // Flat ground: 56x0.1x56 units
+        Collider::cuboid(56.0, 0.1, 56.0),
     ));
 
     // Spawn trees with collision
@@ -142,7 +142,7 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
             Transform::from_translation(position),
             GlobalTransform::default(),
             RigidBody::Static,
-            Collider::cylinder(0.3, 2.0), // Collision cylinder for tree trunk and canopy
+            Collider::cylinder(0.3, 2.0),
         ));
     }
 
@@ -154,7 +154,7 @@ fn server_event_system(mut commands: Commands, mut server_events: MessageReader<
         match event {
             ServerEvent::ClientConnected { client_id } => {
                 println!("Client {:?} connected", client_id);
-                // Spawn player for client
+                // Spawn player
                 commands.spawn((
                     Player,
                     PlayerOwner(*client_id),
@@ -198,7 +198,7 @@ fn handle_move_player(
             let rotated_direction = yaw_rotation * event.direction;
 
             velocity.x = rotated_direction.x * speed;
-            velocity.z = rotated_direction.z * speed; // Rotate player to face movement direction (only in XZ plane)
+            velocity.z = rotated_direction.z * speed;
             let horizontal_direction = Vec3::new(rotated_direction.x, 0.0, rotated_direction.z);
             if horizontal_direction.length() > 0.01 {
                 let target_rotation =
@@ -207,7 +207,7 @@ fn handle_move_player(
             }
 
             if event.direction.y > 0.0 {
-                // Check if on ground, for simplicity, assume if y velocity is small
+                // Ground check
                 if velocity.y.abs() < 0.1 {
                     velocity.y = 5.0; // jump velocity
                 }
@@ -331,7 +331,7 @@ fn zombie_movement(
                     // Switch to Wandering
                     behavior.state = ZombieAiState::Wandering;
                     behavior.timer =
-                        Timer::from_seconds(rand::random::<f32>() * 2.0 + 2.0, TimerMode::Once); // Wander for 2-4 seconds
+                        Timer::from_seconds(rand::random::<f32>() * 2.0 + 2.0, TimerMode::Once);
 
                     // Pick a random direction
                     behavior.wander_direction = Vec3::new(
@@ -363,7 +363,6 @@ fn zombie_movement(
                     behavior.state = ZombieAiState::Idle;
                     behavior.timer =
                         Timer::from_seconds(rand::random::<f32>() * 2.0 + 1.0, TimerMode::Once);
-                    // Idle for 1-3 seconds
                 }
             }
             _ => {} // Chasing is handled above
@@ -388,7 +387,7 @@ fn zombie_collision_damage(
             if distance < COLLISION_DISTANCE && health.current > 0.0 {
                 let damage = DAMAGE_PER_SECOND * time.delta_secs();
                 health.current = (health.current - damage).max(0.0);
-                damage_flash.timer = 0.3; // Flash for 0.3 seconds
+                damage_flash.timer = 0.3;
 
                 if health.current <= 0.0 {
                     println!("Player died!");
@@ -420,7 +419,7 @@ fn handle_player_attack(
         let mut attacker_pos: Option<Vec3> = None;
         let mut attacker_entity: Option<Entity> = None;
 
-        // Find the attacking player (there should only be one per event)
+        // Find attacker
         for (entity, _, transform, _, _) in &player_query {
             attacker_pos = Some(transform.translation);
             attacker_entity = Some(entity);
@@ -428,7 +427,7 @@ fn handle_player_attack(
         }
 
         if let Some(attacker_pos) = attacker_pos {
-            // Attack Zombies
+            // Attack zombies
             for (zombie_entity, zombie_transform) in &mut zombie_query {
                 let distance = attacker_pos.distance(zombie_transform.translation);
 
@@ -438,7 +437,7 @@ fn handle_player_attack(
                 }
             }
 
-            // Attack other Players
+            // Attack players
             for (entity, _, transform, mut health, mut damage_flash) in &mut player_query {
                 if Some(entity) != attacker_entity {
                     let distance = attacker_pos.distance(transform.translation);
