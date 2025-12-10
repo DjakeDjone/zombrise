@@ -10,10 +10,42 @@ pub struct PlayerAttacking {
     pub attack_timer: f32,
 }
 
+/// Tracks idle time for triggering idle variations
+#[cfg(feature = "client")]
+#[derive(Component)]
+pub struct PlayerIdleTimer {
+    pub time_idle: f32,
+    pub next_variation_time: f32,
+    pub is_playing_variation: bool,
+}
+
+#[cfg(feature = "client")]
+impl Default for PlayerIdleTimer {
+    fn default() -> Self {
+        Self {
+            time_idle: 0.0,
+            next_variation_time: rand_variation_time(),
+            is_playing_variation: false,
+        }
+    }
+}
+
+#[cfg(feature = "client")]
+fn rand_variation_time() -> f32 {
+    // Random time between 3 and 8 seconds
+    3.0 + (std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos() as f32
+        / 1_000_000_000.0)
+        * 5.0
+}
+
 #[cfg(feature = "client")]
 #[derive(Component)]
 pub struct PlayerAnimations {
     pub idle: AnimationNodeIndex,
+    pub idle_nervous: AnimationNodeIndex,
     pub walking: AnimationNodeIndex,
     pub attacking: AnimationNodeIndex,
 }
@@ -33,6 +65,7 @@ pub struct PlayerRoot(pub Entity);
 pub enum PlayerAnimationState {
     #[default]
     Idle,
+    IdleNervous,
     Walking,
     Attacking,
 }
@@ -41,6 +74,7 @@ pub enum PlayerAnimationState {
 pub struct PlayerAnimationConfig {
     pub model_path: &'static str,
     pub idle_animation: AnimationClipConfig,
+    pub idle_nervous_animation: AnimationClipConfig,
     pub walking_animation: AnimationClipConfig,
     pub attacking_animation: AnimationClipConfig,
 }
@@ -61,6 +95,11 @@ impl Default for PlayerAnimationConfig {
                 path: "player.glb#Animation6", // Ninja Idle
                 speed: 1.0,
                 repeat: true,
+            },
+            idle_nervous_animation: AnimationClipConfig {
+                path: "player.glb#Animation5", // Nervously Look Around
+                speed: 1.0,
+                repeat: false, // Play once then return to idle
             },
             walking_animation: AnimationClipConfig {
                 path: "player.glb#Animation10", // Standing Run Forward
@@ -111,6 +150,11 @@ pub fn setup_player_animation(
             config.idle_animation.speed,
             graph.root,
         );
+        let idle_nervous_node = graph.add_clip(
+            asset_server.load(config.idle_nervous_animation.path),
+            config.idle_nervous_animation.speed,
+            graph.root,
+        );
         let walking_node = graph.add_clip(
             asset_server.load(config.walking_animation.path),
             config.walking_animation.speed,
@@ -127,9 +171,11 @@ pub fn setup_player_animation(
             .insert(AnimationGraphHandle(graphs.add(graph)));
         commands.entity(entity).insert(PlayerAnimations {
             idle: idle_node,
+            idle_nervous: idle_nervous_node,
             walking: walking_node,
             attacking: attacking_node,
         });
+        commands.entity(entity).insert(PlayerIdleTimer::default());
         commands
             .entity(entity)
             .insert(PlayerAnimationState::default());
@@ -164,11 +210,14 @@ pub fn update_player_animation_state(
             .map(|a| a.is_attacking)
             .unwrap_or(false);
 
-        // Determine animation state
+        // Determine animation state (don't override IdleNervous if not moving/attacking)
         let new_state = if is_attacking {
             PlayerAnimationState::Attacking
         } else if is_moving {
             PlayerAnimationState::Walking
+        } else if *anim_state == PlayerAnimationState::IdleNervous {
+            // Keep IdleNervous until the variation timer resets it
+            PlayerAnimationState::IdleNervous
         } else {
             PlayerAnimationState::Idle
         };
@@ -221,6 +270,10 @@ pub fn control_player_animation(
                     player.play(animations.idle);
                 }
             }
+            PlayerAnimationState::IdleNervous => {
+                // Play once - doesn't repeat
+                player.play(animations.idle_nervous);
+            }
             PlayerAnimationState::Walking => {
                 if config.walking_animation.repeat {
                     player.play(animations.walking).repeat();
@@ -270,6 +323,46 @@ pub fn trigger_player_attack_animation(
         for mut attacking in &mut query {
             attacking.is_attacking = true;
             attacking.attack_timer = 0.0;
+        }
+    }
+}
+
+/// Triggers idle variations (nervous look around) after being idle for a while
+#[cfg(feature = "client")]
+pub fn update_player_idle_variations(
+    mut anim_query: Query<(&mut PlayerAnimationState, &PlayerRoot, &mut PlayerIdleTimer)>,
+    time: Res<Time>,
+) {
+    const NERVOUS_DURATION: f32 = 2.5; // Duration of nervous look animation
+
+    for (mut anim_state, _player_root, mut idle_timer) in &mut anim_query {
+        match *anim_state {
+            PlayerAnimationState::Idle => {
+                // Increment idle time
+                idle_timer.time_idle += time.delta_secs();
+
+                // Check if it's time to play a variation
+                if idle_timer.time_idle >= idle_timer.next_variation_time {
+                    *anim_state = PlayerAnimationState::IdleNervous;
+                    idle_timer.is_playing_variation = true;
+                    idle_timer.time_idle = 0.0;
+                }
+            }
+            PlayerAnimationState::IdleNervous => {
+                // Wait for animation to finish, then return to idle
+                idle_timer.time_idle += time.delta_secs();
+                if idle_timer.time_idle >= NERVOUS_DURATION {
+                    *anim_state = PlayerAnimationState::Idle;
+                    idle_timer.is_playing_variation = false;
+                    idle_timer.time_idle = 0.0;
+                    idle_timer.next_variation_time = rand_variation_time();
+                }
+            }
+            _ => {
+                // Reset idle timer when not idle
+                idle_timer.time_idle = 0.0;
+                idle_timer.is_playing_variation = false;
+            }
         }
     }
 }

@@ -282,6 +282,9 @@ pub fn control_zombie_animation(
     let config = ZombieAnimationConfig::default();
 
     for (mut player, animations, state) in &mut animation_players {
+        // Stop all current animations to ensure clean transition
+        player.stop_all();
+
         match *state {
             ZombieAnimationState::Idle => {
                 if config.idle_animation.repeat {
