@@ -5,12 +5,16 @@ use bevy::{
 };
 
 #[cfg(feature = "client")]
+#[cfg(feature = "client")]
 use bevy::{
-    ecs::system::Res,
+    ecs::system::{Query, Res},
     input::{keyboard::KeyCode, ButtonInput},
 };
 use bevy_replicon_renet2::renet2::ClientId;
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "client")]
+use super::player_animation::PlayerAttacking;
 
 #[derive(Component, Serialize, Deserialize, Reflect)]
 pub struct Player;
@@ -62,29 +66,35 @@ pub fn handle_input(
     mut move_events: bevy::prelude::MessageWriter<MovePlayer>,
     mut attack_events: bevy::prelude::MessageWriter<PlayerAttack>,
     camera_rotation: Option<Res<CameraRotation>>,
+    player_attacking_query: Query<&PlayerAttacking>,
 ) {
     let mut direction = Vec3::ZERO;
 
-    if keyboard_input.pressed(KeyCode::ArrowUp) || keyboard_input.pressed(KeyCode::KeyW) {
-        direction.z -= 1.0;
-    }
-    if keyboard_input.pressed(KeyCode::ArrowDown) || keyboard_input.pressed(KeyCode::KeyS) {
-        direction.z += 1.0;
-    }
-    if keyboard_input.pressed(KeyCode::ArrowLeft) || keyboard_input.pressed(KeyCode::KeyA) {
-        direction.x -= 1.0;
-    }
-    if keyboard_input.pressed(KeyCode::ArrowRight) || keyboard_input.pressed(KeyCode::KeyD) {
-        direction.x += 1.0;
-    }
+    // Check if any player (specifically the local one ideally, but simplified here) is attacking
+    let is_attacking = player_attacking_query.iter().any(|a| a.is_attacking);
 
-    if direction.length() > 0.0 {
-        direction = direction.normalize();
-        let camera_yaw = camera_rotation.map(|r| r.yaw).unwrap_or(0.0);
-        move_events.write(MovePlayer {
-            direction,
-            camera_yaw,
-        });
+    if !is_attacking {
+        if keyboard_input.pressed(KeyCode::ArrowUp) || keyboard_input.pressed(KeyCode::KeyW) {
+            direction.z -= 1.0;
+        }
+        if keyboard_input.pressed(KeyCode::ArrowDown) || keyboard_input.pressed(KeyCode::KeyS) {
+            direction.z += 1.0;
+        }
+        if keyboard_input.pressed(KeyCode::ArrowLeft) || keyboard_input.pressed(KeyCode::KeyA) {
+            direction.x -= 1.0;
+        }
+        if keyboard_input.pressed(KeyCode::ArrowRight) || keyboard_input.pressed(KeyCode::KeyD) {
+            direction.x += 1.0;
+        }
+
+        if direction.length() > 0.0 {
+            direction = direction.normalize();
+            let camera_yaw = camera_rotation.map(|r| r.yaw).unwrap_or(0.0);
+            move_events.write(MovePlayer {
+                direction,
+                camera_yaw,
+            });
+        }
     }
 
     if keyboard_input.just_pressed(KeyCode::Space) {
