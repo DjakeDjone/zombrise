@@ -23,12 +23,12 @@ use std::{
     time::SystemTime,
 };
 use zombrise_shared::players::player::{
-    handle_input, CameraRotation, DamageFlash, Health, MainCamera, Player, PlayerOwner,
+    handle_input, CameraRotation, DamageFlash, Health, MainCamera, MyClientId, Player, PlayerOwner,
 };
 use zombrise_shared::players::player_animation::{
     control_player_animation, setup_player_animation, trigger_player_attack_animation,
     update_player_animation_state, update_player_attack_timer, update_player_idle_variations,
-    PlayerAttacking,
+    update_player_prev_positions, PlayerAttacking,
 };
 use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
 use zombrise_shared::zombie::zombie::{
@@ -65,8 +65,7 @@ fn client_event_system(client: Res<RenetClient>, mut player_died: ResMut<PlayerD
     }
 }
 
-#[derive(Resource)]
-pub struct MyClientId(pub u64);
+// MyClientId is now imported from zombrise_shared::players::player
 
 fn main() {
     App::new()
@@ -88,6 +87,7 @@ fn main() {
             pitch: -0.3,
         })
         .init_resource::<PlayerDied>()
+        .init_resource::<MyClientId>()
         .init_resource::<ZombieAnimationEventsState>()
         .add_message::<ZombieAnimationEvent>()
         .add_systems(Startup, setup_camera)
@@ -162,6 +162,7 @@ fn main() {
             (
                 setup_player_animation,
                 update_player_animation_state,
+                update_player_prev_positions,
                 control_player_animation,
                 trigger_player_attack_animation,
                 update_player_attack_timer,
@@ -226,7 +227,11 @@ fn setup_client(
 
     commands.insert_resource(client);
     commands.insert_resource(transport);
+
+    // Set the client ID immediately so we can identify our player
+    // Note: client_id is the renet2 auth ID we use for authentication
     commands.insert_resource(MyClientId(client_id));
+    println!("Client ID set to: {}", client_id);
 }
 
 fn setup_camera(mut commands: Commands) {

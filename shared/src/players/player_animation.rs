@@ -197,12 +197,24 @@ pub fn setup_player_animation(
 
 #[cfg(feature = "client")]
 pub fn update_player_animation_state(
-    mut anim_query: Query<(&mut PlayerAnimationState, &PlayerRoot)>,
+    mut anim_query: Query<(
+        &mut PlayerAnimationState,
+        &PlayerRoot,
+        Option<&mut PlayerPrevPosition>,
+    )>,
+    player_query: Query<
+        (
+            &crate::players::player::PlayerOwner,
+            &bevy::transform::components::Transform,
+        ),
+        With<crate::players::player::Player>,
+    >,
     player_attacking_query: Query<&PlayerAttacking, With<crate::players::player::Player>>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    my_client_id: Option<Res<crate::players::player::MyClientId>>,
 ) {
-    // Check movement
-    let is_moving = keyboard_input.pressed(KeyCode::KeyW)
+    // Check local movement input
+    let is_moving_input = keyboard_input.pressed(KeyCode::KeyW)
         || keyboard_input.pressed(KeyCode::KeyA)
         || keyboard_input.pressed(KeyCode::KeyS)
         || keyboard_input.pressed(KeyCode::KeyD)
@@ -211,12 +223,35 @@ pub fn update_player_animation_state(
         || keyboard_input.pressed(KeyCode::ArrowLeft)
         || keyboard_input.pressed(KeyCode::ArrowRight);
 
-    for (mut anim_state, player_root) in &mut anim_query {
+    let local_client_id = my_client_id.map(|id| id.0).unwrap_or(0);
+
+    for (mut anim_state, player_root, prev_position) in &mut anim_query {
+        // Get player info for this animation entity
+        let Ok((owner, transform)) = player_query.get(player_root.0) else {
+            continue;
+        };
+
+        let is_local_player = local_client_id != 0 && owner.0 == local_client_id;
+
         // Check attacking
         let is_attacking = player_attacking_query
             .get(player_root.0)
             .map(|a| a.is_attacking)
             .unwrap_or(false);
+
+        // Determine if player is moving
+        let is_moving = if is_local_player {
+            // For local player, use keyboard input
+            is_moving_input
+        } else {
+            // For remote players, check position changes
+            if let Some(prev_pos) = prev_position {
+                let distance_moved = transform.translation.distance(prev_pos.0);
+                distance_moved > 0.01
+            } else {
+                false
+            }
+        };
 
         // Determine state
         let new_state = if is_attacking {
@@ -232,6 +267,29 @@ pub fn update_player_animation_state(
 
         if *anim_state != new_state {
             *anim_state = new_state;
+        }
+    }
+}
+
+/// Updates previous position for tracking movement
+#[cfg(feature = "client")]
+pub fn update_player_prev_positions(
+    mut commands: Commands,
+    mut query: Query<(Entity, &PlayerRoot, Option<&mut PlayerPrevPosition>)>,
+    player_query: Query<
+        &bevy::transform::components::Transform,
+        With<crate::players::player::Player>,
+    >,
+) {
+    for (entity, player_root, prev_position) in &mut query {
+        if let Ok(transform) = player_query.get(player_root.0) {
+            if let Some(mut prev_pos) = prev_position {
+                prev_pos.0 = transform.translation;
+            } else {
+                commands
+                    .entity(entity)
+                    .insert(PlayerPrevPosition(transform.translation));
+            }
         }
     }
 }

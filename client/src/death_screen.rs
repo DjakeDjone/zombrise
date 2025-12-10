@@ -13,6 +13,11 @@ pub fn detect_player_death(
     client_id: Res<crate::MyClientId>,
     mut player_died: ResMut<PlayerDied>,
 ) {
+    // Don't check death if we haven't connected yet (client ID is 0)
+    if client_id.0 == 0 {
+        return;
+    }
+
     let our_player = player_query
         .iter()
         .find(|(_, owner)| owner.0 == client_id.0);
@@ -23,11 +28,8 @@ pub fn detect_player_death(
         } else if health.current > 0.0 && player_died.0 {
             player_died.0 = false;
         }
-    } else {
-        if !player_died.0 {
-            player_died.0 = true;
-        }
     }
+    // If we haven't found our player yet, don't assume we're dead - we might still be loading
 }
 
 /// Shows death screen
