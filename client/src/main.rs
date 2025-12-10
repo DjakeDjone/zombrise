@@ -44,6 +44,11 @@ use startup_screen::{
 mod death_screen;
 use death_screen::{detect_player_death, handle_death_screen_input, show_death_screen, PlayerDied};
 
+mod loading_screen;
+use loading_screen::{
+    check_loading_progress, cleanup_loading_screen, show_loading_screen, start_loading_assets,
+};
+
 fn client_event_system(client: Res<RenetClient>, mut player_died: ResMut<PlayerDied>) {
     if client.is_disconnected() {
         if !player_died.0 {
@@ -113,6 +118,16 @@ fn main() {
             )
                 .run_if(in_state(AppState::StartupScreen)),
         )
+        // Loading state systems
+        .add_systems(
+            OnEnter(AppState::Loading),
+            (show_loading_screen, start_loading_assets),
+        )
+        .add_systems(
+            Update,
+            check_loading_progress.run_if(in_state(AppState::Loading)),
+        )
+        .add_systems(OnExit(AppState::Loading), cleanup_loading_screen)
         .add_systems(
             OnEnter(AppState::Playing),
             (setup, setup_client, lock_cursor, activate_game_cameras),
