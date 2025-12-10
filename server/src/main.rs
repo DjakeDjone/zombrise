@@ -6,9 +6,10 @@ use std::time::Duration;
 
 use avian3d::prelude::*;
 use bevy_replicon::prelude::*;
+use bevy_replicon::shared::backend::connected_client::NetworkId;
 use bevy_replicon_renet2::{
     netcode::{NetcodeServerTransport, ServerAuthentication},
-    renet2::{ConnectionConfig, RenetServer, ServerEvent},
+    renet2::{ConnectionConfig, RenetServer},
     RenetChannelsExt, RepliconRenetPlugins,
 };
 use rand::Rng;
@@ -60,11 +61,12 @@ fn main() {
             20.0,
             TimerMode::Repeating,
         )))
+        .add_observer(spawn_clients)
+        .add_observer(despawn_clients)
         .add_systems(Startup, setup_server)
         .add_systems(
             Update,
             (
-                server_event_system,
                 handle_move_player,
                 handle_player_attack,
                 update_map_size,
@@ -149,32 +151,68 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     println!("Server started on {}", public_addr);
 }
 
-fn server_event_system(mut commands: Commands, mut server_events: MessageReader<ServerEvent>) {
-    for event in server_events.read() {
-        match event {
-            ServerEvent::ClientConnected { client_id } => {
-                println!("Client {:?} connected", client_id);
-                // Spawn player
-                commands.spawn((
-                    Player,
-                    PlayerOwner(*client_id),
-                    Health::default(),
-                    DamageFlash::default(),
-                    Replicated,
-                    Transform::from_xyz(0.0, 1.0, 0.0),
-                    GlobalTransform::default(),
-                    RigidBody::Dynamic,
-                    Collider::capsule(0.5, 1.0),
-                    LinearVelocity::ZERO,
-                    AngularVelocity::ZERO,
-                    LockedAxes::new().lock_rotation_x().lock_rotation_z(),
-                    LinearDamping(0.5),
-                    AngularDamping(20.0),
-                ));
-            }
-            ServerEvent::ClientDisconnected { client_id, reason } => {
-                println!("Client {:?} disconnected: {:?}", client_id, reason);
-            }
+/// Spawns a player when a client connects
+fn spawn_clients(
+    trigger: On<Add, ConnectedClient>,
+    mut commands: Commands,
+    network_id_query: Query<&NetworkId>,
+) {
+    let client_entity = trigger.event().entity;
+
+    // Get the NetworkId (renet2 client_id) from the client entity
+    let network_id = network_id_query
+        .get(client_entity)
+        .expect("ConnectedClient should have NetworkId");
+    let client_id = network_id.get();
+
+    println!(
+        "Client {:?} connected with network_id: {}",
+        client_entity, client_id
+    );
+
+    commands.spawn((
+        Player,
+        PlayerOwner(client_id),
+        Health::default(),
+        DamageFlash::default(),
+        Replicated,
+        Transform::from_xyz(0.0, 1.0, 0.0),
+        GlobalTransform::default(),
+        RigidBody::Dynamic,
+        Collider::capsule(0.5, 1.0),
+        LinearVelocity::ZERO,
+        AngularVelocity::ZERO,
+        LockedAxes::new().lock_rotation_x().lock_rotation_z(),
+        LinearDamping(0.5),
+        AngularDamping(20.0),
+    ));
+}
+
+/// Despawns a player when a client disconnects
+fn despawn_clients(
+    trigger: On<Remove, ConnectedClient>,
+    mut commands: Commands,
+    players: Query<(Entity, &PlayerOwner)>,
+    network_id_query: Query<&NetworkId>,
+) {
+    let client_entity = trigger.event().entity;
+
+    // Get the NetworkId before the entity is fully removed
+    let client_id = network_id_query
+        .get(client_entity)
+        .map(|id| id.get())
+        .unwrap_or(0);
+
+    println!(
+        "Client {:?} disconnected (network_id: {})",
+        client_entity, client_id
+    );
+
+    // Find and despawn the player owned by this client
+    for (entity, owner) in &players {
+        if owner.0 == client_id {
+            commands.entity(entity).despawn();
+            break;
         }
     }
 }
@@ -182,17 +220,25 @@ fn server_event_system(mut commands: Commands, mut server_events: MessageReader<
 fn handle_move_player(
     mut events: MessageReader<FromClient<MovePlayer>>,
     mut query: Query<(&PlayerOwner, &mut LinearVelocity, &mut Transform)>,
+    network_id_query: Query<&NetworkId>,
 ) {
     let speed = 5.0;
     for FromClient {
         message: event,
-        client_id: _,
+        client_id,
     } in events.read()
     {
-        for (_owner, mut velocity, mut transform) in &mut query {
-            // if owner.0 != *client_id {
-            //     continue;
-            // }
+        // Get NetworkId from the client entity
+        let client_network_id = client_id
+            .entity()
+            .and_then(|e| network_id_query.get(e).ok())
+            .map(|id| id.get())
+            .unwrap_or(0);
+
+        for (owner, mut velocity, mut transform) in &mut query {
+            if owner.0 != client_network_id {
+                continue;
+            }
 
             let yaw_rotation = Quat::from_rotation_y(event.camera_yaw);
             let rotated_direction = yaw_rotation * event.direction;
@@ -411,19 +457,29 @@ fn handle_player_attack(
     >,
     mut zombie_query: Query<(Entity, &Transform), With<Zombie>>,
     mut commands: Commands,
+    network_id_query: Query<&NetworkId>,
 ) {
     const ATTACK_RANGE: f32 = 2.0;
     const PLAYER_DAMAGE: f32 = 10.0;
 
-    for FromClient { .. } in events.read() {
+    for FromClient { client_id, .. } in events.read() {
         let mut attacker_pos: Option<Vec3> = None;
         let mut attacker_entity: Option<Entity> = None;
 
-        // Find attacker
-        for (entity, _, transform, _, _) in &player_query {
-            attacker_pos = Some(transform.translation);
-            attacker_entity = Some(entity);
-            break;
+        // Get NetworkId from the client entity
+        let client_network_id = client_id
+            .entity()
+            .and_then(|e| network_id_query.get(e).ok())
+            .map(|id| id.get())
+            .unwrap_or(0);
+
+        // Find attacker corresponding to this client_id
+        for (entity, owner, transform, _, _) in &player_query {
+            if owner.0 == client_network_id {
+                attacker_pos = Some(transform.translation);
+                attacker_entity = Some(entity);
+                break;
+            }
         }
 
         if let Some(attacker_pos) = attacker_pos {

@@ -10,7 +10,6 @@ use bevy::{
     ecs::system::{Query, Res},
     input::{keyboard::KeyCode, ButtonInput},
 };
-use bevy_replicon_renet2::renet2::ClientId;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "client")]
@@ -40,10 +39,15 @@ pub struct DamageFlash {
 }
 
 #[derive(Component, Serialize, Deserialize, Reflect)]
-pub struct PlayerOwner(pub ClientId);
+pub struct PlayerOwner(pub u64);
 
 #[derive(Component)]
 pub struct MainCamera;
+
+/// Resource to track the local client's ID
+#[cfg(feature = "client")]
+#[derive(bevy::prelude::Resource, Default)]
+pub struct MyClientId(pub u64);
 
 #[derive(Event, Message, Serialize, Deserialize)]
 pub struct MovePlayer {
@@ -56,7 +60,7 @@ pub struct PlayerAttack;
 
 #[derive(Event, Message, Serialize, Deserialize)]
 pub struct DamagePlayer {
-    pub client_id: ClientId,
+    pub client_id: u64,
     pub amount: f32,
 }
 
