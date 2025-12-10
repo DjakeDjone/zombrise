@@ -4,7 +4,7 @@ use bevy::prelude::*;
 #[cfg(feature = "client")]
 use std::time::Duration;
 
-/// Tracks if the player is currently attacking (for animation purposes)
+/// Tracks attacking state
 #[cfg(feature = "client")]
 #[derive(Component, Default)]
 pub struct PlayerAttacking {
@@ -12,7 +12,7 @@ pub struct PlayerAttacking {
     pub attack_timer: f32,
 }
 
-/// Tracks idle time for triggering idle variations
+/// Tracks idle time
 #[cfg(feature = "client")]
 #[derive(Component)]
 pub struct PlayerIdleTimer {
@@ -34,7 +34,7 @@ impl Default for PlayerIdleTimer {
 
 #[cfg(feature = "client")]
 fn rand_variation_time() -> f32 {
-    // Random time between 3 and 8 seconds
+    // Random 3-8s
     3.0 + (std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -52,12 +52,12 @@ pub struct PlayerAnimations {
     pub attacking: AnimationNodeIndex,
 }
 
-/// Tracks previous position to compute velocity for animation state
+/// Previous position
 #[cfg(feature = "client")]
 #[derive(Component)]
 pub struct PlayerPrevPosition(pub Vec3);
 
-/// Links an AnimationPlayer entity back to its root Player entity
+/// Link to root
 #[cfg(feature = "client")]
 #[derive(Component)]
 pub struct PlayerRoot(pub Entity);
@@ -99,12 +99,13 @@ impl Default for PlayerAnimationConfig {
                 repeat: true,
             },
             idle_nervous_animation: AnimationClipConfig {
-                path: "player.glb#Animation5", // Nervously Look Around
+                path: "player.glb#Animation5", // Nervously
+
                 speed: 1.0,
-                repeat: false, // Play once then return to idle
+                repeat: false, // Play once
             },
             walking_animation: AnimationClipConfig {
-                path: "player.glb#Animation10", // Standing Run Forward
+                path: "player.glb#Animation10", // Stand Run
                 speed: 1.0,
                 repeat: true,
             },
@@ -129,7 +130,7 @@ pub fn setup_player_animation(
     let config = PlayerAnimationConfig::default();
 
     for (entity, mut player) in &mut animation_players {
-        // Find the root Player entity by traversing up the parent hierarchy
+        // Find root player
         let mut player_root = None;
         let mut current = entity;
         while let Ok(child_of) = parent_query.get(current) {
@@ -140,7 +141,7 @@ pub fn setup_player_animation(
             }
         }
 
-        // Skip if this AnimationPlayer doesn't belong to a Player
+        // Skip if not player
         let Some(player_entity) = player_root else {
             continue;
         };
@@ -170,10 +171,10 @@ pub fn setup_player_animation(
 
         let graph_handle = graphs.add(graph);
 
-        // Create AnimationTransitions to manage smooth blending between animations
+        // Smooth transitions
         let mut transitions = AnimationTransitions::new();
 
-        // Start with idle animation via AnimationTransitions
+        // Start idle
         transitions
             .play(&mut player, idle_node, Duration::ZERO)
             .repeat();
@@ -200,7 +201,7 @@ pub fn update_player_animation_state(
     player_attacking_query: Query<&PlayerAttacking, With<crate::players::player::Player>>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
 ) {
-    // Check if movement keys are pressed
+    // Check movement
     let is_moving = keyboard_input.pressed(KeyCode::KeyW)
         || keyboard_input.pressed(KeyCode::KeyA)
         || keyboard_input.pressed(KeyCode::KeyS)
@@ -211,19 +212,19 @@ pub fn update_player_animation_state(
         || keyboard_input.pressed(KeyCode::ArrowRight);
 
     for (mut anim_state, player_root) in &mut anim_query {
-        // Check if player is attacking
+        // Check attacking
         let is_attacking = player_attacking_query
             .get(player_root.0)
             .map(|a| a.is_attacking)
             .unwrap_or(false);
 
-        // Determine animation state (don't override IdleNervous if not moving/attacking)
+        // Determine state
         let new_state = if is_attacking {
             PlayerAnimationState::Attacking
         } else if is_moving {
             PlayerAnimationState::Walking
         } else if *anim_state == PlayerAnimationState::IdleNervous {
-            // Keep IdleNervous until the variation timer resets it
+            // Keep nervous
             PlayerAnimationState::IdleNervous
         } else {
             PlayerAnimationState::Idle
@@ -235,12 +236,12 @@ pub fn update_player_animation_state(
     }
 }
 
-/// Tracks the last animation state that was played, to avoid replaying the same animation
+/// Tracks last animation
 #[cfg(feature = "client")]
 #[derive(Component, Default, Clone, Copy, PartialEq, Eq)]
 pub struct LastPlayedPlayerAnimation(Option<PlayerAnimationState>);
 
-/// Transition duration for blending between animations
+/// Transition duration
 #[cfg(feature = "client")]
 const ANIMATION_TRANSITION_DURATION: Duration = Duration::from_millis(200);
 
@@ -261,10 +262,10 @@ pub fn control_player_animation(
     for (entity, mut player, mut transitions, animations, state, last_played) in
         &mut animation_players
     {
-        // Check if we need to play this animation
+        // Check if change needed
         let should_play = match last_played {
             Some(last) => last.0 != Some(*state),
-            None => true, // Never played anything, must play
+            None => true, // Force play
         };
 
         if !should_play {
@@ -273,7 +274,7 @@ pub fn control_player_animation(
 
         println!("Playing player animation: {:?}", state);
 
-        // Use AnimationTransitions for smooth blending between animations
+        // Smooth blend
         match *state {
             PlayerAnimationState::Idle => {
                 let active =
@@ -283,7 +284,7 @@ pub fn control_player_animation(
                 }
             }
             PlayerAnimationState::IdleNervous => {
-                // Play once - doesn't repeat
+                // Play once
                 transitions.play(
                     &mut player,
                     animations.idle_nervous,
@@ -319,10 +320,10 @@ pub fn control_player_animation(
     }
 }
 
-/// Updates the attack timer and resets attacking state when animation finishes
+/// Update attack timer
 #[cfg(feature = "client")]
 pub fn update_player_attack_timer(mut query: Query<&mut PlayerAttacking>, time: Res<Time>) {
-    const ATTACK_DURATION: f32 = 0.6; // Duration of attack animation
+    const ATTACK_DURATION: f32 = 0.6; // Attack duration
 
     for mut attacking in &mut query {
         if attacking.is_attacking {
@@ -335,7 +336,7 @@ pub fn update_player_attack_timer(mut query: Query<&mut PlayerAttacking>, time: 
     }
 }
 
-/// Triggers attack animation when player attacks
+/// Trigger attack
 #[cfg(feature = "client")]
 pub fn trigger_player_attack_animation(
     mut query: Query<&mut PlayerAttacking>,
@@ -349,21 +350,21 @@ pub fn trigger_player_attack_animation(
     }
 }
 
-/// Triggers idle variations (nervous look around) after being idle for a while
+/// Trigger variations
 #[cfg(feature = "client")]
 pub fn update_player_idle_variations(
     mut anim_query: Query<(&mut PlayerAnimationState, &PlayerRoot, &mut PlayerIdleTimer)>,
     time: Res<Time>,
 ) {
-    const NERVOUS_DURATION: f32 = 2.5; // Duration of nervous look animation
+    const NERVOUS_DURATION: f32 = 2.5; // Nervous duration
 
     for (mut anim_state, _player_root, mut idle_timer) in &mut anim_query {
         match *anim_state {
             PlayerAnimationState::Idle => {
-                // Increment idle time
+                // Inc idle
                 idle_timer.time_idle += time.delta_secs();
 
-                // Check if it's time to play a variation
+                // Check variation
                 if idle_timer.time_idle >= idle_timer.next_variation_time {
                     *anim_state = PlayerAnimationState::IdleNervous;
                     idle_timer.is_playing_variation = true;
@@ -371,7 +372,7 @@ pub fn update_player_idle_variations(
                 }
             }
             PlayerAnimationState::IdleNervous => {
-                // Wait for animation to finish, then return to idle
+                // Wait finish, return idle
                 idle_timer.time_idle += time.delta_secs();
                 if idle_timer.time_idle >= NERVOUS_DURATION {
                     *anim_state = PlayerAnimationState::Idle;
@@ -381,7 +382,7 @@ pub fn update_player_idle_variations(
                 }
             }
             _ => {
-                // Reset idle timer when not idle
+                // Reset timer
                 idle_timer.time_idle = 0.0;
                 idle_timer.is_playing_variation = false;
             }

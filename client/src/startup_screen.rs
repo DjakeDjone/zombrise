@@ -115,7 +115,7 @@ pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConf
                 ServerUrlInput,
             ));
 
-            // local or remote connection buttons for quick configuration
+            // Quick connect buttons
             parent
                 .spawn(Node {
                     flex_direction: FlexDirection::Row,
@@ -212,7 +212,7 @@ pub fn handle_startup_ui(
         match *interaction {
             Interaction::Pressed => {
                 *color = Color::srgb(0.15, 0.5, 0.15).into();
-                // Update server config from input before connecting
+                // Update config
                 if let Ok(input_value) = input_query.single() {
                     server_config.url = input_value.0.clone();
                 }
@@ -233,7 +233,7 @@ pub fn handle_copy_paste(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut evr_kbd: bevy::prelude::MessageReader<KeyboardInput>,
 ) {
-    // Check if Ctrl (or Cmd on Mac) is pressed
+    // Check Ctrl/Cmd
     let ctrl_pressed = keyboard_input.pressed(KeyCode::ControlLeft)
         || keyboard_input.pressed(KeyCode::ControlRight)
         || keyboard_input.pressed(KeyCode::SuperLeft)
@@ -243,7 +243,7 @@ pub fn handle_copy_paste(
         return;
     }
 
-    // Process keyboard events
+    // Process keys
     for ev in evr_kbd.read() {
         if !ev.state.is_pressed() {
             continue;
@@ -251,7 +251,7 @@ pub fn handle_copy_paste(
 
         if let Ok(mut input_value) = input_query.single_mut() {
             match ev.key_code {
-                // Copy: Ctrl+C
+                // Copy
                 KeyCode::KeyC => {
                     if let Ok(mut clipboard) = arboard::Clipboard::new() {
                         if let Err(e) = clipboard.set_text(&input_value.0) {
@@ -259,7 +259,7 @@ pub fn handle_copy_paste(
                         }
                     }
                 }
-                // Paste: Ctrl+V
+                // Paste
                 KeyCode::KeyV => {
                     if let Ok(mut clipboard) = arboard::Clipboard::new() {
                         if let Ok(text) = clipboard.get_text() {
@@ -267,7 +267,7 @@ pub fn handle_copy_paste(
                         }
                     }
                 }
-                // Cut: Ctrl+X
+                // Cut
                 KeyCode::KeyX => {
                     if let Ok(mut clipboard) = arboard::Clipboard::new() {
                         if let Err(e) = clipboard.set_text(&input_value.0) {
@@ -277,10 +277,9 @@ pub fn handle_copy_paste(
                         }
                     }
                 }
-                // Select All: Ctrl+A (just for completeness, though selection isn't visible)
+                // Select All
                 KeyCode::KeyA => {
-                    // The text input doesn't support visible selection,
-                    // but we can at least acknowledge the shortcut
+                    // Selection not visible, but acknowledge shortcut
                 }
                 _ => {}
             }
@@ -308,7 +307,7 @@ pub fn handle_quick_connect_buttons(
         match *interaction {
             Interaction::Pressed => {
                 *color = Color::srgb(0.15, 0.15, 0.2).into();
-                // Set to local server address
+                // Set local
                 if let Ok(mut input_value) = input_query.single_mut() {
                     input_value.0 = "127.0.0.1:5000".to_string();
                 }
@@ -327,7 +326,7 @@ pub fn handle_quick_connect_buttons(
         match *interaction {
             Interaction::Pressed => {
                 *color = Color::srgb(0.15, 0.15, 0.2).into();
-                // Set to remote server address
+                // Set remote
                 if let Ok(mut input_value) = input_query.single_mut() {
                     input_value.0 = "138.199.203.159:5000".to_string();
                 }

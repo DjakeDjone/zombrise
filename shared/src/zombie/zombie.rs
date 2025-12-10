@@ -22,12 +22,12 @@ pub struct ZombieAnimations {
     pub dying: AnimationNodeIndex,
 }
 
-/// Tracks previous position to compute velocity for animation state
+/// Previous position
 #[cfg(feature = "client")]
 #[derive(Component)]
 pub struct ZombiePrevPosition(pub Vec3);
 
-/// Links an AnimationPlayer entity back to its root Zombie entity
+/// Link to root
 #[cfg(feature = "client")]
 #[derive(Component)]
 pub struct ZombieRoot(pub Entity);
@@ -93,27 +93,27 @@ impl Default for ZombieAnimationConfig {
         Self {
             model_path: "zombie.glb#Scene0",
             idle_animation: AnimationClipConfig {
-                path: "zombie.glb#Animation3", // Zombie Idle
+                path: "zombie.glb#Animation3", // Idle
                 speed: 1.0,
                 repeat: true,
             },
             walking_animation: AnimationClipConfig {
-                path: "zombie.glb#Animation7", // Zombie Walk
+                path: "zombie.glb#Animation7", // Walk
                 speed: ZOMBIE_SPEED * ZOMBIE_ANIMATION_SPEED_MULTIPLIER,
                 repeat: true,
             },
             running_animation: AnimationClipConfig {
-                path: "zombie.glb#Animation5", // Zombie Running
+                path: "zombie.glb#Animation5", // Running
                 speed: ZOMBIE_SPEED * ZOMBIE_ANIMATION_SPEED_MULTIPLIER * 1.5,
                 repeat: true,
             },
             attacking_animation: AnimationClipConfig {
-                path: "zombie.glb#Animation0", // Zombie Attack
+                path: "zombie.glb#Animation0", // Attack
                 speed: 1.2,
                 repeat: true,
             },
             dying_animation: AnimationClipConfig {
-                path: "zombie.glb#Animation2", // Zombie Death
+                path: "zombie.glb#Animation2", // Death
                 speed: 1.0,
                 repeat: false,
             },
@@ -143,7 +143,7 @@ pub fn setup_zombie_animation(
     let config = ZombieAnimationConfig::default();
 
     for (entity, mut player) in &mut animation_players {
-        // Find the root Zombie entity by traversing up the parent hierarchy
+        // Find root zombie
         let mut zombie_root = None;
         let mut current = entity;
         while let Ok(child_of) = parent_query.get(current) {
@@ -154,7 +154,7 @@ pub fn setup_zombie_animation(
             }
         }
 
-        // Skip if this AnimationPlayer doesn't belong to a Zombie
+        // Skip if not zombie
         let Some(zombie_entity) = zombie_root else {
             continue;
         };
@@ -189,10 +189,10 @@ pub fn setup_zombie_animation(
 
         let graph_handle = graphs.add(graph);
 
-        // Create AnimationTransitions to manage smooth blending between animations
+        // Smooth transitions
         let mut transitions = AnimationTransitions::new();
 
-        // Start with idle animation via AnimationTransitions
+        // Start idle
         transitions
             .play(&mut player, idle_node, Duration::ZERO)
             .repeat();
@@ -227,16 +227,16 @@ pub fn update_zombie_animation_state(
 ) {
     const CHASE_RANGE: f32 = 10.0;
     const ATTACK_RANGE: f32 = 1.5;
-    const MOVEMENT_THRESHOLD: f32 = 0.01; // Minimum velocity to be considered moving
+    const MOVEMENT_THRESHOLD: f32 = 0.01; // Min velocity
 
     for (entity, mut anim_state, zombie_root, prev_pos) in &mut anim_query {
-        // Get the zombie's transform from the root entity
+        // Get transform
         let Ok(zombie_transform) = zombie_transform_query.get(zombie_root.0) else {
             continue;
         };
         let zombie_pos = zombie_transform.translation();
 
-        // Compute velocity by comparing to previous position
+        // Compute velocity
         let is_moving = if let Some(prev) = prev_pos {
             let velocity = (zombie_pos - prev.0).length();
             velocity > MOVEMENT_THRESHOLD
@@ -244,7 +244,7 @@ pub fn update_zombie_animation_state(
             false
         };
 
-        // Update previous position for next frame
+        // Update prev pos
         commands
             .entity(entity)
             .insert(ZombiePrevPosition(zombie_pos));
@@ -258,15 +258,15 @@ pub fn update_zombie_animation_state(
             }
         }
 
-        // Determine animation state based on distance and movement
+        // Determine state
         let new_state = if nearest_distance < ATTACK_RANGE {
             ZombieAnimationState::Attacking
         } else if nearest_distance < CHASE_RANGE {
-            ZombieAnimationState::Running // Chasing = running
+            ZombieAnimationState::Running // Chasing=running
         } else if is_moving {
-            ZombieAnimationState::Walking // Wandering = walking
+            ZombieAnimationState::Walking // Wandering=walking
         } else {
-            ZombieAnimationState::Idle // Standing still = idle
+            ZombieAnimationState::Idle // Stand=idle
         };
 
         if *anim_state != new_state {
@@ -275,7 +275,7 @@ pub fn update_zombie_animation_state(
     }
 }
 
-/// Transition duration for blending between animations
+/// Transition duration
 #[cfg(feature = "client")]
 const ANIMATION_TRANSITION_DURATION: Duration = Duration::from_millis(200);
 
@@ -294,7 +294,7 @@ pub fn control_zombie_animation(
     let config = ZombieAnimationConfig::default();
 
     for (mut player, mut transitions, animations, state) in &mut animation_players {
-        // Use AnimationTransitions for smooth blending between animations
+        // Smooth blend
         match *state {
             ZombieAnimationState::Idle => {
                 let active =
@@ -356,20 +356,20 @@ pub fn add_zombie_animation_events(
 
     let config = ZombieAnimationConfig::default();
 
-    // Check if clips are loaded
+    // Check clips
     let walking_handle = asset_server.load(config.walking_animation.path);
     let attacking_handle = asset_server.load(config.attacking_animation.path);
 
     if let Some(clip) = clips.get_mut(&walking_handle) {
-        // Add footsteps at 0.0s and 0.5s (assuming 1s loop for simplicity, adjust as needed)
+        // Add footsteps (0.0s, 0.5s)
         clip.add_event(0.2, ZombieAnimationEvent::Footstep);
         clip.add_event(0.7, ZombieAnimationEvent::Footstep);
-        events_state.events_added = true; // Mark as done (at least for walking)
+        events_state.events_added = true; // Mark done
         println!("Added footstep events to walking animation");
     }
 
     if let Some(clip) = clips.get_mut(&attacking_handle) {
-        // Add attack hit at 0.5s
+        // Add attack hit (0.5s)
         clip.add_event(0.5, ZombieAnimationEvent::AttackHit);
         println!("Added attack hit event to attacking animation");
     }

@@ -7,7 +7,7 @@ pub struct PlayerDied(pub bool);
 #[derive(Component)]
 pub struct DeathScreenMarker;
 
-/// Detects when the player's health reaches zero or when the player entity is despawned
+/// Detects player death
 pub fn detect_player_death(
     player_query: Query<(&Health, &PlayerOwner), With<Player>>,
     client_id: Res<crate::MyClientId>,
@@ -30,7 +30,7 @@ pub fn detect_player_death(
     }
 }
 
-/// Shows the death screen overlay when the player dies
+/// Shows death screen
 pub fn show_death_screen(
     mut commands: Commands,
     player_died: Res<PlayerDied>,
@@ -38,18 +38,10 @@ pub fn show_death_screen(
     health_ui_query: Query<Entity, With<crate::HealthBarUI>>,
 ) {
     if player_died.0 && death_screen_query.is_empty() {
-        // Clean up health bar UI when showing death screen
         for entity in health_ui_query.iter() {
             commands.entity(entity).despawn();
         }
 
-        // Unlock cursor when dead
-        // if let Ok(mut window) = window_query.single_mut() {
-        //     window.cursor.grab_mode = CursorGrabMode::None;
-        //     window.cursor.visible = true;
-        // }
-
-        // Spawn death screen UI
         commands
             .spawn((
                 Node {
@@ -82,7 +74,6 @@ pub fn show_death_screen(
                         ));
                     });
 
-                // Subtitle text
                 parent.spawn((
                     Text::new("The zombies got you..."),
                     TextFont {
@@ -96,7 +87,6 @@ pub fn show_death_screen(
                     },
                 ));
 
-                // Info text
                 parent.spawn((
                     Text::new("Press ESC to return to menu"),
                     TextFont {
@@ -111,20 +101,13 @@ pub fn show_death_screen(
                 ));
             });
     } else if !player_died.0 && !death_screen_query.is_empty() {
-        // Player has respawned - clean up death screen
         for entity in death_screen_query.iter() {
             commands.entity(entity).despawn();
         }
-
-        // Re-lock cursor
-        // if let Ok(mut window) = window_query.single_mut() {
-        //     window.cursor.grab_mode = CursorGrabMode::Locked;
-        //     window.cursor.visible = false;
-        // }
     }
 }
 
-/// Allows the player to return to the startup screen by pressing ESC
+/// Handle ESC to return to menu
 pub fn handle_death_screen_input(
     mut next_state: ResMut<NextState<crate::startup_screen::AppState>>,
     keys: Res<ButtonInput<KeyCode>>,
@@ -133,15 +116,11 @@ pub fn handle_death_screen_input(
     mut player_died: ResMut<PlayerDied>,
 ) {
     if player_died.0 && keys.just_pressed(KeyCode::Escape) {
-        // Clean up death screen
         for entity in death_screen_query.iter() {
             commands.entity(entity).despawn();
         }
 
-        // Reset death state
         player_died.0 = false;
-
-        // Return to startup screen
         next_state.set(crate::startup_screen::AppState::StartupScreen);
     }
 }
