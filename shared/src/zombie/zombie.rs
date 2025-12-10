@@ -7,9 +7,8 @@ use serde::{Deserialize, Serialize};
 #[reflect(Component)]
 pub struct Zombie;
 
-pub const ZOMBIE_SPEED: f32 = 0.5;
-// Reduced from 4.0 to 2.0 to match movement speed better and reduce "tear back" effect from root motion
-pub const ZOMBIE_ANIMATION_SPEED_MULTIPLIER: f32 = 2.0;
+pub const ZOMBIE_SPEED: f32 = 2.0;
+pub const ZOMBIE_ANIMATION_SPEED_MULTIPLIER: f32 = 1.0;
 
 #[cfg(feature = "client")]
 #[derive(Component)]
@@ -19,6 +18,11 @@ pub struct ZombieAnimations {
     pub attacking: AnimationNodeIndex,
     pub dying: AnimationNodeIndex,
 }
+
+/// Links an AnimationPlayer entity back to its root Zombie entity
+#[cfg(feature = "client")]
+#[derive(Component)]
+pub struct ZombieRoot(pub Entity);
 
 #[cfg(feature = "client")]
 #[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
@@ -80,22 +84,22 @@ impl Default for ZombieAnimationConfig {
         Self {
             model_path: "zombie.glb#Scene0",
             idle_animation: AnimationClipConfig {
-                path: "zombie.glb#Animation0",
+                path: "zombie.glb#Animation3",
                 speed: 1.0,
                 repeat: true,
             },
             walking_animation: AnimationClipConfig {
-                path: "zombie.glb#Animation11",
+                path: "zombie.glb#Animation5",
                 speed: ZOMBIE_SPEED * ZOMBIE_ANIMATION_SPEED_MULTIPLIER,
                 repeat: true,
             },
             attacking_animation: AnimationClipConfig {
-                path: "zombie.glb#Animation10",
+                path: "zombie.glb#Animation0",
                 speed: 1.2,
                 repeat: true,
             },
             dying_animation: AnimationClipConfig {
-                path: "zombie.glb#Animation12",
+                path: "zombie.glb#Animation2",
                 speed: 1.0,
                 repeat: false,
             },
@@ -119,10 +123,28 @@ pub fn setup_zombie_animation(
     mut animation_players: Query<(Entity, &mut AnimationPlayer), Added<AnimationPlayer>>,
     asset_server: Res<AssetServer>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
+    parent_query: Query<&ChildOf>,
+    zombie_query: Query<Entity, With<Zombie>>,
 ) {
     let config = ZombieAnimationConfig::default();
 
     for (entity, mut player) in &mut animation_players {
+        // Find the root Zombie entity by traversing up the parent hierarchy
+        let mut zombie_root = None;
+        let mut current = entity;
+        while let Ok(child_of) = parent_query.get(current) {
+            current = child_of.parent();
+            if zombie_query.get(current).is_ok() {
+                zombie_root = Some(current);
+                break;
+            }
+        }
+
+        // Skip if this AnimationPlayer doesn't belong to a Zombie
+        let Some(zombie_entity) = zombie_root else {
+            continue;
+        };
+
         let mut graph = AnimationGraph::new();
 
         let idle_node = graph.add_clip(
@@ -158,6 +180,8 @@ pub fn setup_zombie_animation(
         commands
             .entity(entity)
             .insert(ZombieAnimationState::default());
+        // Link this AnimationPlayer to its root Zombie entity
+        commands.entity(entity).insert(ZombieRoot(zombie_entity));
 
         // Start with idle animation
         player.play(idle_node).repeat();
@@ -166,13 +190,18 @@ pub fn setup_zombie_animation(
 
 #[cfg(feature = "client")]
 pub fn update_zombie_animation_state(
-    mut zombie_query: Query<(&mut ZombieAnimationState, &GlobalTransform), With<Zombie>>,
+    mut anim_query: Query<(&mut ZombieAnimationState, &ZombieRoot)>,
+    zombie_transform_query: Query<&GlobalTransform, With<Zombie>>,
     player_query: Query<&GlobalTransform, With<crate::players::player::Player>>,
 ) {
     const CHASE_RANGE: f32 = 10.0;
     const ATTACK_RANGE: f32 = 1.5;
 
-    for (mut anim_state, zombie_transform) in &mut zombie_query {
+    for (mut anim_state, zombie_root) in &mut anim_query {
+        // Get the zombie's transform from the root entity
+        let Ok(zombie_transform) = zombie_transform_query.get(zombie_root.0) else {
+            continue;
+        };
         let zombie_pos = zombie_transform.translation();
 
         // Find nearest player

@@ -128,11 +128,11 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     // Spawn trees with collision
     let radius = 28.0;
     let tree_positions = [
-        Vec3::new(radius * 0.34, 0.0, radius * 0.4),
-        Vec3::new(-radius * 0.36, 0.0, -radius * 0.38),
-        Vec3::new(-radius * 0.12, 0.0, -radius * 0.55),
-        Vec3::new(radius * 0.55, 0.0, 0.22),
-        Vec3::new(-radius * 0.5, 0.0, 0.15),
+        Vec3::new(radius * 0.34, 1.0, radius * 0.4),
+        Vec3::new(-radius * 0.36, 1.0, -radius * 0.38),
+        Vec3::new(-radius * 0.12, 1.0, -radius * 0.55),
+        Vec3::new(radius * 0.55, 1.0, 0.22),
+        Vec3::new(-radius * 0.5, 1.0, 0.15),
     ];
 
     for position in tree_positions {
@@ -161,7 +161,7 @@ fn server_event_system(mut commands: Commands, mut server_events: MessageReader<
                     Health::default(),
                     DamageFlash::default(),
                     Replicated,
-                    Transform::from_xyz(0.0, 0.5, 0.0),
+                    Transform::from_xyz(0.0, 1.0, 0.0),
                     GlobalTransform::default(),
                     RigidBody::Dynamic,
                     Collider::capsule(0.5, 1.0),
@@ -248,10 +248,10 @@ fn spawn_zombies(
         commands.spawn((
             Zombie,
             Replicated,
-            Transform::from_xyz(x, 0.5, z),
+            Transform::from_xyz(x, 1.0, z),
             GlobalTransform::default(),
             RigidBody::Dynamic,
-            Collider::capsule(0.5, 1.0),
+            Collider::capsule(0.3, 0.8),
             LinearVelocity::ZERO,
             AngularVelocity::ZERO,
             LockedAxes::new().lock_rotation_x().lock_rotation_z(),
