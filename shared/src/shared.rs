@@ -1,9 +1,10 @@
+use crate::entity2::Health;
 pub use crate::players::player::{
-    DamageFlash, DamagePlayer, Health, MovePlayer, Player, PlayerAttack, PlayerOwner,
+    DamageFlash, DamagePlayer, MovePlayer, Player, PlayerAttack, PlayerOwner,
 };
-pub use crate::zombie::zombie::Zombie;
+pub use crate::zombie::zombie::{Zombie, ZombieDamageFlash};
 use bevy::prelude::*;
-use bevy_replicon::prelude::{*, Channel};
+use bevy_replicon::prelude::{Channel, *};
 use serde::{Deserialize, Serialize};
 
 #[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default)]
@@ -23,6 +24,7 @@ impl Plugin for SharedPlugin {
         app.replicate::<Health>();
         app.replicate::<DamageFlash>();
         app.replicate::<Zombie>();
+        app.replicate::<ZombieDamageFlash>();
         app.replicate::<Transform>();
         app.replicate::<MapMarker>();
         app.replicate::<TreeMarker>();

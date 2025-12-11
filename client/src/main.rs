@@ -22,8 +22,9 @@ use std::{
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
     time::SystemTime,
 };
+use zombrise_shared::entity2::Health;
 use zombrise_shared::players::player::{
-    handle_input, CameraRotation, DamageFlash, Health, MainCamera, MyClientId, Player, PlayerOwner,
+    handle_input, CameraRotation, DamageFlash, MainCamera, MyClientId, Player, PlayerOwner,
 };
 use zombrise_shared::players::player_animation::{
     control_player_animation, setup_player_animation, trigger_player_attack_animation,
