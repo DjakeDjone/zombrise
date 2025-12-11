@@ -421,7 +421,7 @@ fn spawn_player_visuals(
                 Visibility::default(),
                 InheritedVisibility::default(),
                 ViewVisibility::default(),
-                Transform::from_translation(Vec3::new(0.0, -0.75, 0.0))
+                Transform::from_translation(Vec3::new(0.0, -1.1, 0.0))
                     .with_rotation(Quat::from_rotation_y(std::f32::consts::PI)),
                 GlobalTransform::default(),
                 PlayerVisualMesh,
