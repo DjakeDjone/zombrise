@@ -9,6 +9,11 @@ use std::time::Duration;
 #[reflect(Component)]
 pub struct Zombie;
 
+#[derive(Component, Serialize, Deserialize, Reflect, Default)]
+pub struct ZombieDamageFlash {
+    pub timer: f32,
+}
+
 pub const ZOMBIE_SPEED: f32 = 2.0;
 pub const ZOMBIE_ANIMATION_SPEED_MULTIPLIER: f32 = 1.0;
 
@@ -20,6 +25,7 @@ pub struct ZombieAnimations {
     pub running: AnimationNodeIndex,
     pub attacking: AnimationNodeIndex,
     pub dying: AnimationNodeIndex,
+    pub hit: AnimationNodeIndex,
 }
 
 /// Previous position
@@ -40,6 +46,7 @@ pub enum ZombieAnimationState {
     Running,
     Attacking,
     Dying,
+    Hit,
 }
 
 #[cfg(feature = "client")]
@@ -78,6 +85,7 @@ pub struct ZombieAnimationConfig {
     pub running_animation: AnimationClipConfig,
     pub attacking_animation: AnimationClipConfig,
     pub dying_animation: AnimationClipConfig,
+    pub hit_animation: AnimationClipConfig,
 }
 
 #[cfg(feature = "client")]
@@ -115,6 +123,11 @@ impl Default for ZombieAnimationConfig {
             dying_animation: AnimationClipConfig {
                 path: "zombie.glb#Animation2", // Death
                 speed: 1.0,
+                repeat: false,
+            },
+            hit_animation: AnimationClipConfig {
+                path: "zombie.glb#Animation4", // Punching (used as hit reaction)
+                speed: 1.5,
                 repeat: false,
             },
         }
@@ -186,6 +199,11 @@ pub fn setup_zombie_animation(
             config.dying_animation.speed,
             graph.root,
         );
+        let hit_node = graph.add_clip(
+            asset_server.load(config.hit_animation.path),
+            config.hit_animation.speed,
+            graph.root,
+        );
 
         let graph_handle = graphs.add(graph);
 
@@ -206,6 +224,7 @@ pub fn setup_zombie_animation(
                 running: running_node,
                 attacking: attacking_node,
                 dying: dying_node,
+                hit: hit_node,
             })
             .insert(ZombieAnimationState::default())
             .insert(ZombieRoot(zombie_entity))
@@ -222,7 +241,7 @@ pub fn update_zombie_animation_state(
         &ZombieRoot,
         Option<&ZombiePrevPosition>,
     )>,
-    zombie_transform_query: Query<&GlobalTransform, With<Zombie>>,
+    zombie_query: Query<(&GlobalTransform, Option<&ZombieDamageFlash>), With<Zombie>>,
     player_query: Query<&GlobalTransform, With<crate::players::player::Player>>,
 ) {
     const CHASE_RANGE: f32 = 10.0;
@@ -230,11 +249,14 @@ pub fn update_zombie_animation_state(
     const MOVEMENT_THRESHOLD: f32 = 0.01; // Min velocity
 
     for (entity, mut anim_state, zombie_root, prev_pos) in &mut anim_query {
-        // Get transform
-        let Ok(zombie_transform) = zombie_transform_query.get(zombie_root.0) else {
+        // Get transform and damage flash from root zombie
+        let Ok((zombie_transform, damage_flash)) = zombie_query.get(zombie_root.0) else {
             continue;
         };
         let zombie_pos = zombie_transform.translation();
+
+        // Check if zombie is being hit (damage flash is active)
+        let is_hit = damage_flash.map(|df| df.timer > 0.0).unwrap_or(false);
 
         // Compute velocity
         let is_moving = if let Some(prev) = prev_pos {
@@ -258,8 +280,10 @@ pub fn update_zombie_animation_state(
             }
         }
 
-        // Determine state
-        let new_state = if nearest_distance < ATTACK_RANGE {
+        // Determine state - Hit takes priority
+        let new_state = if is_hit {
+            ZombieAnimationState::Hit
+        } else if nearest_distance < ATTACK_RANGE {
             ZombieAnimationState::Attacking
         } else if nearest_distance < CHASE_RANGE {
             ZombieAnimationState::Running // Chasing=running
@@ -337,6 +361,13 @@ pub fn control_zombie_animation(
                 let active =
                     transitions.play(&mut player, animations.dying, ANIMATION_TRANSITION_DURATION);
                 if config.dying_animation.repeat {
+                    active.repeat();
+                }
+            }
+            ZombieAnimationState::Hit => {
+                let active =
+                    transitions.play(&mut player, animations.hit, ANIMATION_TRANSITION_DURATION);
+                if config.hit_animation.repeat {
                     active.repeat();
                 }
             }

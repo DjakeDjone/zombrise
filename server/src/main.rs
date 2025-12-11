@@ -18,9 +18,12 @@ use std::{
     net::{SocketAddr, UdpSocket},
     time::SystemTime,
 };
-use zombrise_shared::players::player::{DamageFlash, Health, Player, PlayerAttack, PlayerOwner};
-use zombrise_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker};
+use zombrise_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker, ZombieDamageFlash};
 use zombrise_shared::zombie::zombie::{Zombie, ZOMBIE_SPEED};
+use zombrise_shared::{
+    entity2::Health,
+    players::player::{DamageFlash, Player, PlayerAttack, PlayerOwner},
+};
 
 #[derive(Resource)]
 struct ZombieSpawnTimer(Timer);
@@ -79,6 +82,7 @@ fn main() {
                 zombie_movement,
                 zombie_collision_damage,
                 update_damage_flash,
+                update_zombie_damage_flash,
                 remove_dead_players,
                 remove_fallen_entities,
             ),
@@ -294,6 +298,8 @@ fn spawn_zombies(
         commands.spawn((
             Zombie,
             Replicated,
+            Health::default(),
+            ZombieDamageFlash::default(),
             Transform::from_xyz(x, 1.0, z),
             GlobalTransform::default(),
             RigidBody::Dynamic,
@@ -453,14 +459,18 @@ fn handle_player_attack(
             &mut Health,
             &mut DamageFlash,
         ),
-        With<Player>,
+        (With<Player>, Without<Zombie>),
     >,
-    mut zombie_query: Query<(Entity, &Transform), With<Zombie>>,
+    mut zombie_query: Query<
+        (Entity, &Transform, &mut Health, &mut ZombieDamageFlash),
+        (With<Zombie>, Without<Player>),
+    >,
     mut commands: Commands,
     network_id_query: Query<&NetworkId>,
 ) {
     const ATTACK_RANGE: f32 = 2.0;
     const PLAYER_DAMAGE: f32 = 10.0;
+    const ZOMBIE_DAMAGE: f32 = 20.0;
 
     for FromClient { client_id, .. } in events.read() {
         let mut attacker_pos: Option<Vec3> = None;
@@ -484,11 +494,19 @@ fn handle_player_attack(
 
         if let Some(attacker_pos) = attacker_pos {
             // Attack zombies
-            for (zombie_entity, zombie_transform) in &mut zombie_query {
+            for (zombie_entity, zombie_transform, mut zombie_health, mut zombie_damage_flash) in
+                &mut zombie_query
+            {
                 let distance = attacker_pos.distance(zombie_transform.translation);
 
                 if distance < ATTACK_RANGE {
-                    commands.entity(zombie_entity).despawn();
+                    zombie_health.current = (zombie_health.current - ZOMBIE_DAMAGE).max(0.0);
+                    zombie_damage_flash.timer = 0.5; // Trigger hit animation
+
+                    if zombie_health.current == 0.0 {
+                        commands.entity(zombie_entity).despawn();
+                    }
+
                     println!("Player attacked zombie at distance {}", distance);
                 }
             }
@@ -510,6 +528,17 @@ fn handle_player_attack(
 }
 
 fn update_damage_flash(mut query: Query<&mut DamageFlash>, time: Res<Time>) {
+    for mut damage_flash in &mut query {
+        if damage_flash.timer > 0.0 {
+            damage_flash.timer -= time.delta_secs();
+            if damage_flash.timer < 0.0 {
+                damage_flash.timer = 0.0;
+            }
+        }
+    }
+}
+
+fn update_zombie_damage_flash(mut query: Query<&mut ZombieDamageFlash>, time: Res<Time>) {
     for mut damage_flash in &mut query {
         if damage_flash.timer > 0.0 {
             damage_flash.timer -= time.delta_secs();

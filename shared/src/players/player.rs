@@ -18,21 +18,6 @@ use super::player_animation::PlayerAttacking;
 #[derive(Component, Serialize, Deserialize, Reflect)]
 pub struct Player;
 
-#[derive(Component, Serialize, Deserialize, Reflect, Clone)]
-pub struct Health {
-    pub current: f32,
-    pub max: f32,
-}
-
-impl Default for Health {
-    fn default() -> Self {
-        Self {
-            current: 100.0,
-            max: 100.0,
-        }
-    }
-}
-
 #[derive(Component, Serialize, Deserialize, Reflect, Default)]
 pub struct DamageFlash {
     pub timer: f32,

@@ -1,5 +1,8 @@
 use bevy::prelude::*;
-use zombrise_shared::players::player::{Health, Player, PlayerOwner};
+use zombrise_shared::{
+    entity2::Health,
+    players::player::{Player, PlayerOwner},
+};
 
 #[derive(Resource, Default)]
 pub struct PlayerDied(pub bool);
