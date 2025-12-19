@@ -22,7 +22,7 @@ use zombrise_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker, Z
 use zombrise_shared::zombie::zombie::{Zombie, ZOMBIE_SPEED};
 use zombrise_shared::{
     entity2::Health,
-    players::player::{DamageFlash, Player, PlayerAttack, PlayerOwner},
+    players::player::{DamageFlash, Player, PlayerAttack, PlayerAttackCooldown, PlayerOwner},
 };
 
 #[derive(Resource)]
@@ -83,6 +83,7 @@ fn main() {
                 zombie_collision_damage,
                 update_damage_flash,
                 update_zombie_damage_flash,
+                update_attack_cooldown,
                 remove_dead_players,
                 remove_fallen_entities,
             ),
@@ -179,6 +180,7 @@ fn spawn_clients(
         PlayerOwner(client_id),
         Health::default(),
         DamageFlash::default(),
+        PlayerAttackCooldown::default(),
         Replicated,
         Transform::from_xyz(0.0, 1.0, 0.0),
         GlobalTransform::default(),
@@ -458,6 +460,7 @@ fn handle_player_attack(
             &Transform,
             &mut Health,
             &mut DamageFlash,
+            &mut PlayerAttackCooldown,
         ),
         (With<Player>, Without<Zombie>),
     >,
@@ -467,14 +470,15 @@ fn handle_player_attack(
     >,
     mut commands: Commands,
     network_id_query: Query<&NetworkId>,
+    spatial_query: SpatialQuery,
 ) {
     const ATTACK_RANGE: f32 = 2.0;
+    const ATTACK_ANGLE: f32 = 0.5; // ~60 degrees half-angle
     const PLAYER_DAMAGE: f32 = 10.0;
     const ZOMBIE_DAMAGE: f32 = 20.0;
 
     for FromClient { client_id, .. } in events.read() {
-        let mut attacker_pos: Option<Vec3> = None;
-        let mut attacker_entity: Option<Entity> = None;
+        let mut attacker_info: Option<(Entity, Transform)> = None;
 
         // Get NetworkId from the client entity
         let client_network_id = client_id
@@ -484,15 +488,26 @@ fn handle_player_attack(
             .unwrap_or(0);
 
         // Find attacker corresponding to this client_id
-        for (entity, owner, transform, _, _) in &player_query {
+        for (entity, owner, transform, _, _, _) in &player_query {
             if owner.0 == client_network_id {
-                attacker_pos = Some(transform.translation);
-                attacker_entity = Some(entity);
+                attacker_info = Some((entity, *transform));
                 break;
             }
         }
 
-        if let Some(attacker_pos) = attacker_pos {
+        if let Some((attacker_entity, attacker_transform)) = attacker_info {
+            let (_, _, _, _, _, mut cooldown) = player_query.get_mut(attacker_entity).unwrap();
+
+            if cooldown.0 > 0.0 {
+                continue;
+            }
+
+            // Reset cooldown
+            cooldown.0 = 0.5; // 0.5 seconds cooldown
+
+            let attacker_pos = attacker_transform.translation;
+            let attacker_forward = *attacker_transform.forward();
+
             // Attack zombies
             for (zombie_entity, zombie_transform, mut zombie_health, mut zombie_damage_flash) in
                 &mut zombie_query
@@ -500,6 +515,28 @@ fn handle_player_attack(
                 let distance = attacker_pos.distance(zombie_transform.translation);
 
                 if distance < ATTACK_RANGE {
+                    // Calculate direction to target
+                    let diff = zombie_transform.translation - attacker_pos;
+
+                    // If they are too close, just hit. Otherwise check angle and line of sight.
+                    if let Ok(to_target) = Dir3::new(diff) {
+                        // Check angle
+                        if attacker_forward.dot(*to_target) < ATTACK_ANGLE {
+                            continue;
+                        }
+
+                        // Check line of sight (raycast)
+                        let filter = SpatialQueryFilter::from_excluded_entities([attacker_entity]);
+                        if let Some(hit) =
+                            spatial_query.cast_ray(attacker_pos, to_target, distance, true, &filter)
+                        {
+                            if hit.entity != zombie_entity {
+                                continue;
+                            }
+                        }
+                    }
+
+                    // Hit confirmed
                     zombie_health.current = (zombie_health.current - ZOMBIE_DAMAGE).max(0.0);
                     zombie_damage_flash.timer = 0.5; // Trigger hit animation
 
@@ -512,11 +549,36 @@ fn handle_player_attack(
             }
 
             // Attack players
-            for (entity, _, transform, mut health, mut damage_flash) in &mut player_query {
-                if Some(entity) != attacker_entity {
+            for (entity, _, transform, mut health, mut damage_flash, _) in &mut player_query {
+                if entity != attacker_entity {
                     let distance = attacker_pos.distance(transform.translation);
 
                     if distance < ATTACK_RANGE {
+                        let diff = transform.translation - attacker_pos;
+
+                        if let Ok(to_target) = Dir3::new(diff) {
+                            // Check angle
+                            if attacker_forward.dot(*to_target) < ATTACK_ANGLE {
+                                continue;
+                            }
+
+                            // Check line of sight (raycast)
+                            let filter =
+                                SpatialQueryFilter::from_excluded_entities([attacker_entity]);
+                            if let Some(hit) = spatial_query.cast_ray(
+                                attacker_pos,
+                                to_target,
+                                distance,
+                                true,
+                                &filter,
+                            ) {
+                                if hit.entity != entity {
+                                    continue;
+                                }
+                            }
+                        }
+
+                        // Hit confirmed
                         health.current = (health.current - PLAYER_DAMAGE).max(0.0);
                         damage_flash.timer = 0.3;
                         println!("Player attacked another player at distance {}", distance);
@@ -588,6 +650,17 @@ fn remove_fallen_entities(
                 transform.translation
             );
             commands.entity(entity).despawn();
+        }
+    }
+}
+
+fn update_attack_cooldown(mut query: Query<&mut PlayerAttackCooldown>, time: Res<Time>) {
+    for mut cooldown in &mut query {
+        if cooldown.0 > 0.0 {
+            cooldown.0 -= time.delta_secs();
+            if cooldown.0 < 0.0 {
+                cooldown.0 = 0.0;
+            }
         }
     }
 }

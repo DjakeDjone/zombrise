@@ -1,0 +1,69 @@
+{
+    "server": {
+        "address": "0.0.0.0",
+        "port": 9000,
+        "tcp_port": null,
+        "udp_port": null,
+        "file_port": null,
+        "connection_strategy": "Open",
+        "list": null,
+        "rate_limit": {
+            "enabled": false,
+            "max_tcp_requests_per_minute": null
+        }
+    },
+    "logging": {
+        "debug_level": "Debug",
+        "log_file": null,
+        "max_log_size": null,
+        "log_to_console": true
+    },
+    "security": {
+        "use_password": false,
+        "password": null
+    },
+    "file_sharing": {
+        "enabled": false,
+        "shared_directory": null,
+        "files": null,
+        "initially_loaded": null
+    },
+    "devices": {
+        "initially_send_sensor_data": false,
+        "max_devices": 4,
+        "allowed_device_types": [
+            "Android",
+            "iOS",
+            "Windows",
+            "Linux",
+            "macOS",
+            "Other"
+        ],
+        "initial_frame_rate": 60
+    },
+    "sensors": {
+        "accelerometer": true,
+        "gyroscope": true,
+        "magnetometer": true,
+        "temperature": false,
+        "humidity": false,
+        "pressure": false,
+        "light": false
+    },
+    "developer": {
+        "allow_mocked_sensors": false,
+        "allow_mocked_buttons": false
+    },
+    "health_check": {
+        "server": {
+            "enabled": false,
+            "interval_ms": null,
+            "timeout_ms": null
+        },
+        "client": {
+            "enabled": false,
+            "interval_ms": null,
+            "timeout_ms": null
+        }
+    }
+}
