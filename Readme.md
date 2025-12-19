@@ -13,7 +13,7 @@ You are to weak to survive against them alone? It's multiplayer, so invite your 
 ### Server
 
 ```bash
-cargo run --bin server
+cargo run --bin zombrise_server
 ```
 
 ### Client

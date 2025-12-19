@@ -32,6 +32,7 @@ use zombrise_shared::players::player_animation::{
     update_player_prev_positions, PlayerAttacking,
 };
 use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
+use zombrise_shared::suduxu::SuduxuPlugin;
 use zombrise_shared::zombie::zombie::{
     add_zombie_animation_events, control_zombie_animation, handle_zombie_animation_events,
     setup_zombie_animation, update_zombie_animation_state, Zombie, ZombieAnimationEvent,
@@ -81,6 +82,7 @@ fn main() {
         .add_plugins(RepliconRenetPlugins)
         .add_plugins(SharedPlugin)
         .add_plugins(TextInputPlugin)
+        .add_plugins(SuduxuPlugin)
         .init_state::<AppState>()
         .init_resource::<ServerConfig>()
         .insert_resource(CameraRotation {

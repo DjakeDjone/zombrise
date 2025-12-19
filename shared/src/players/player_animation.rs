@@ -397,11 +397,20 @@ pub fn update_player_attack_timer(mut query: Query<&mut PlayerAttacking>, time: 
 /// Trigger attack
 #[cfg(feature = "client")]
 pub fn trigger_player_attack_animation(
-    mut query: Query<&mut PlayerAttacking>,
+    mut query: Query<(&mut PlayerAttacking, &crate::players::player::PlayerOwner)>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    my_client_id: Res<crate::players::player::MyClientId>,
 ) {
     if keyboard_input.just_pressed(KeyCode::Space) {
-        for mut attacking in &mut query {
+        for (mut attacking, owner) in &mut query {
+            if owner.0 != my_client_id.0 {
+                continue;
+            }
+
+            if attacking.is_attacking {
+                continue;
+            }
+
             attacking.is_attacking = true;
             attacking.attack_timer = 0.0;
         }

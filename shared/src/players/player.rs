@@ -29,6 +29,9 @@ pub struct PlayerOwner(pub u64);
 #[derive(Component)]
 pub struct MainCamera;
 
+#[derive(Component, Default)]
+pub struct PlayerAttackCooldown(pub f32);
+
 /// Resource to track the local client's ID
 #[cfg(feature = "client")]
 #[derive(bevy::prelude::Resource, Default)]
@@ -50,29 +53,50 @@ pub struct DamagePlayer {
 }
 
 #[cfg(feature = "client")]
+#[cfg(feature = "client")]
 pub fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    suduxu_input: Option<Res<ButtonInput<crate::suduxu::SuduxuButton>>>,
     mut move_events: bevy::prelude::MessageWriter<MovePlayer>,
     mut attack_events: bevy::prelude::MessageWriter<PlayerAttack>,
     camera_rotation: Option<Res<CameraRotation>>,
-    player_attacking_query: Query<&PlayerAttacking>,
+    player_attacking_query: Query<(&PlayerAttacking, &PlayerOwner)>,
+    my_client_id: Res<MyClientId>,
 ) {
     let mut direction = Vec3::ZERO;
 
-    // Check if any player (specifically the local one ideally, but simplified here) is attacking
-    let is_attacking = player_attacking_query.iter().any(|a| a.is_attacking);
+    // Check if local player is attacking
+    let is_attacking = player_attacking_query
+        .iter()
+        .any(|(a, owner)| owner.0 == my_client_id.0 && a.is_attacking);
+
+    // Helpers to check suduxu input safely
+    let suduxu_pressed = |btn| suduxu_input.as_ref().map_or(false, |s| s.pressed(btn));
+    let suduxu_just_pressed = |btn| suduxu_input.as_ref().map_or(false, |s| s.just_pressed(btn));
 
     if !is_attacking {
-        if keyboard_input.pressed(KeyCode::ArrowUp) || keyboard_input.pressed(KeyCode::KeyW) {
+        if keyboard_input.pressed(KeyCode::ArrowUp)
+            || keyboard_input.pressed(KeyCode::KeyW)
+            || suduxu_pressed(crate::suduxu::SuduxuButton::Up)
+        {
             direction.z -= 1.0;
         }
-        if keyboard_input.pressed(KeyCode::ArrowDown) || keyboard_input.pressed(KeyCode::KeyS) {
+        if keyboard_input.pressed(KeyCode::ArrowDown)
+            || keyboard_input.pressed(KeyCode::KeyS)
+            || suduxu_pressed(crate::suduxu::SuduxuButton::Down)
+        {
             direction.z += 1.0;
         }
-        if keyboard_input.pressed(KeyCode::ArrowLeft) || keyboard_input.pressed(KeyCode::KeyA) {
+        if keyboard_input.pressed(KeyCode::ArrowLeft)
+            || keyboard_input.pressed(KeyCode::KeyA)
+            || suduxu_pressed(crate::suduxu::SuduxuButton::Left)
+        {
             direction.x -= 1.0;
         }
-        if keyboard_input.pressed(KeyCode::ArrowRight) || keyboard_input.pressed(KeyCode::KeyD) {
+        if keyboard_input.pressed(KeyCode::ArrowRight)
+            || keyboard_input.pressed(KeyCode::KeyD)
+            || suduxu_pressed(crate::suduxu::SuduxuButton::Right)
+        {
             direction.x += 1.0;
         }
 
@@ -86,8 +110,12 @@ pub fn handle_input(
         }
     }
 
-    if keyboard_input.just_pressed(KeyCode::Space) {
-        attack_events.write(PlayerAttack);
+    if keyboard_input.just_pressed(KeyCode::Space)
+        || suduxu_just_pressed(crate::suduxu::SuduxuButton::A)
+    {
+        if !is_attacking {
+            attack_events.write(PlayerAttack);
+        }
     }
 }
 
