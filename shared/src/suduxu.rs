@@ -43,9 +43,22 @@ fn update_suduxu_system(
     };
 
     suduxu.0.tick(time.delta_secs());
-
     input.clear();
-    let client_id = 1; // Assuming client id 1 mapping
+
+    // Find first active client
+    let mut client_id = 0;
+    for id in 1..=4 {
+        let client_info = suduxu.0.find_client_by_id(id);
+        if !client_info.is_empty() {
+            client_id = id;
+            // println!("Using Suduxu Client ID: {}", client_id); // Debug
+            break;
+        }
+    }
+
+    if client_id == 0 {
+        return;
+    }
 
     let all_buttons = [
         SuduxuButton::Up,
@@ -64,6 +77,7 @@ fn update_suduxu_system(
 
     for &btn in all_buttons.iter() {
         if suduxu.0.get_button(client_id, btn, ButtonInputState::Down) {
+            println!("Suduxu Button Pressed: {:?}", btn);
             input.press(btn);
         } else {
             input.release(btn);

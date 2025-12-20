@@ -75,29 +75,47 @@ pub fn handle_input(
     let suduxu_just_pressed = |btn| suduxu_input.as_ref().map_or(false, |s| s.just_pressed(btn));
 
     if !is_attacking {
-        if keyboard_input.pressed(KeyCode::ArrowUp)
-            || keyboard_input.pressed(KeyCode::KeyW)
-            || suduxu_pressed(crate::suduxu::SuduxuButton::Up)
-        {
+        let up_key =
+            keyboard_input.pressed(KeyCode::ArrowUp) || keyboard_input.pressed(KeyCode::KeyW);
+        let down_key =
+            keyboard_input.pressed(KeyCode::ArrowDown) || keyboard_input.pressed(KeyCode::KeyS);
+        let left_key =
+            keyboard_input.pressed(KeyCode::ArrowLeft) || keyboard_input.pressed(KeyCode::KeyA);
+        let right_key =
+            keyboard_input.pressed(KeyCode::ArrowRight) || keyboard_input.pressed(KeyCode::KeyD);
+
+        let up_suduxu = suduxu_pressed(crate::suduxu::SuduxuButton::Up);
+        let down_suduxu = suduxu_pressed(crate::suduxu::SuduxuButton::Down);
+        let left_suduxu = suduxu_pressed(crate::suduxu::SuduxuButton::Left);
+        let right_suduxu = suduxu_pressed(crate::suduxu::SuduxuButton::Right);
+
+        if up_key || up_suduxu {
             direction.z -= 1.0;
         }
-        if keyboard_input.pressed(KeyCode::ArrowDown)
-            || keyboard_input.pressed(KeyCode::KeyS)
-            || suduxu_pressed(crate::suduxu::SuduxuButton::Down)
-        {
+        if down_key || down_suduxu {
             direction.z += 1.0;
         }
-        if keyboard_input.pressed(KeyCode::ArrowLeft)
-            || keyboard_input.pressed(KeyCode::KeyA)
-            || suduxu_pressed(crate::suduxu::SuduxuButton::Left)
-        {
+        if left_key || left_suduxu {
             direction.x -= 1.0;
         }
-        if keyboard_input.pressed(KeyCode::ArrowRight)
-            || keyboard_input.pressed(KeyCode::KeyD)
-            || suduxu_pressed(crate::suduxu::SuduxuButton::Right)
-        {
+        if right_key || right_suduxu {
             direction.x += 1.0;
+        }
+
+        if direction.length() == 0.0
+            && (up_key
+                || down_key
+                || left_key
+                || right_key
+                || up_suduxu
+                || down_suduxu
+                || left_suduxu
+                || right_suduxu)
+        {
+            println!("Movement cancelled! Inputs - Up(K:{},S:{}) Down(K:{},S:{}) Left(K:{},S:{}) Right(K:{},S:{}) -> Dir:{:?} | Attacking: {}",
+                 up_key, up_suduxu, down_key, down_suduxu, left_key, left_suduxu, right_key, right_suduxu, direction, is_attacking);
+        } else if direction.length() > 0.0 {
+            // println!("Moving: {:?}", direction); // Uncomment for spammy movement logs
         }
 
         if direction.length() > 0.0 {
