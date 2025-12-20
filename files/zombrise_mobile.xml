@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<UI>
+    <Column
+        padding="16"
+        fillMaxWidth="true"
+        fillMaxHeight="true"
+        background="#F0F0F0">
+
+        <Text
+            text="Welcome to Suduxu Mobile!"
+            fontSize="24"
+            fontWeight="bold"
+            textAlign="center"
+            padding="8"/>
+
+        <Spacer
+            height="16"/>
+
+        <Row
+            fillMaxWidth="true"
+            padding="8">
+
+            <Button
+                label="Login"
+                width="0"
+                height="48"
+                fillMaxWidth="true"
+                background="#6200EE"
+                backgroundColor="#FFFFFF"/>
+
+            <Spacer
+                width="16"/>
+
+            <Button
+                label="Sign Up"
+                width="0"
+                height="48"
+                fillMaxWidth="true"
+                background="#03DAC5"
+                backgroundColor="#000000"/>
+        </Row>
+
+        <Spacer
+            height="24"/>
+
+        <SuduxuDPad
+            width="200"
+            height="200"/>
+    </Column>
+</UI>

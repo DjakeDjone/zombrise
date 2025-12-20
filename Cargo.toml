@@ -1,10 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "shared",
-    "client",
-    "server",
-]
+members = ["shared", "client", "server", "suduxu-rs"]
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
