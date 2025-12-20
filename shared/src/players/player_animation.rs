@@ -211,6 +211,7 @@ pub fn update_player_animation_state(
     >,
     player_attacking_query: Query<&PlayerAttacking, With<crate::players::player::Player>>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    suduxu_input: Option<Res<ButtonInput<crate::suduxu::SuduxuButton>>>,
     my_client_id: Option<Res<crate::players::player::MyClientId>>,
 ) {
     // Check local movement input
@@ -221,7 +222,13 @@ pub fn update_player_animation_state(
         || keyboard_input.pressed(KeyCode::ArrowUp)
         || keyboard_input.pressed(KeyCode::ArrowDown)
         || keyboard_input.pressed(KeyCode::ArrowLeft)
-        || keyboard_input.pressed(KeyCode::ArrowRight);
+        || keyboard_input.pressed(KeyCode::ArrowRight)
+        || suduxu_input.as_ref().map_or(false, |s| {
+            s.pressed(crate::suduxu::SuduxuButton::Up)
+                || s.pressed(crate::suduxu::SuduxuButton::Down)
+                || s.pressed(crate::suduxu::SuduxuButton::Left)
+                || s.pressed(crate::suduxu::SuduxuButton::Right)
+        });
 
     let local_client_id = my_client_id.map(|id| id.0).unwrap_or(0);
 
@@ -399,9 +406,13 @@ pub fn update_player_attack_timer(mut query: Query<&mut PlayerAttacking>, time: 
 pub fn trigger_player_attack_animation(
     mut query: Query<(&mut PlayerAttacking, &crate::players::player::PlayerOwner)>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    suduxu_input: Option<Res<ButtonInput<crate::suduxu::SuduxuButton>>>,
     my_client_id: Res<crate::players::player::MyClientId>,
 ) {
-    if keyboard_input.just_pressed(KeyCode::Space) {
+    let suduxu_clicked =
+        suduxu_input.map_or(false, |s| s.just_pressed(crate::suduxu::SuduxuButton::A));
+
+    if keyboard_input.just_pressed(KeyCode::Space) || suduxu_clicked {
         for (mut attacking, owner) in &mut query {
             if owner.0 != my_client_id.0 {
                 continue;

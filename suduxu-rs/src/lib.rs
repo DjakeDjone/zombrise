@@ -120,7 +120,7 @@ impl Suduxu {
         unsafe {
             self.lib
                 .get::<ffi::GetButtonInStateFn>(b"get_button_in_state")
-                .map(|f| f(client_id, btn, state))
+                .map(|f| f(client_id, btn, state) != 0)
                 .unwrap_or(false)
         }
     }

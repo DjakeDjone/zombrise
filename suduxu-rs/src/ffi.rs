@@ -42,7 +42,7 @@ pub type IsRunningFn = unsafe extern "C" fn() -> bool;
 pub type DisconnectClientFn = unsafe extern "C" fn(c_ushort);
 pub type DisconnectAllFn = unsafe extern "C" fn();
 pub type GetButtonInStateFn =
-    unsafe extern "C" fn(c_ushort, ButtonInputType, ButtonInputState) -> bool;
+    unsafe extern "C" fn(c_ushort, ButtonInputType, ButtonInputState) -> libc::c_int;
 pub type GetSensorDataFn = unsafe extern "C" fn(c_ushort) -> SensorDataRaw;
 pub type FindAllClientsFn = unsafe extern "C" fn() -> *mut c_char;
 pub type FindClientByIdFn = unsafe extern "C" fn(c_ushort) -> *mut c_char;

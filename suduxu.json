@@ -53,9 +53,9 @@
         "initial_frame_rate": 60
     },
     "sensors": {
-        "accelerometer": true,
-        "gyroscope": true,
-        "magnetometer": true,
+        "accelerometer": false,
+        "gyroscope": false,
+        "magnetometer": false,
         "temperature": false,
         "humidity": false,
         "pressure": false,
