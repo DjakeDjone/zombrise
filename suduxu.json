@@ -23,10 +23,21 @@
         "password": null
     },
     "file_sharing": {
-        "enabled": false,
-        "shared_directory": null,
-        "files": null,
-        "initially_loaded": null
+        "enabled": true,
+        "shared_directory": "./files",
+        "files": [
+            {
+                "name": "MobileThemeXML",
+                "path": "zombrise_mobile.xml",
+                "type": "XML-Theme",
+                "theme_constraints": {
+                    "max_width": 599
+                }
+            }
+        ],
+        "initially_loaded": [
+            "MobileThemeXML"
+        ]
     },
     "devices": {
         "initially_send_sensor_data": false,
