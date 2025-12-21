@@ -2,6 +2,7 @@
 name = "zombrise_client"
 version = "0.1.0"
 edition = "2021"
+description = "A zombie survival game built with Bevy engine."
 
 [dependencies]
 zombrise_shared = { path = "../shared", features = ["client"] }

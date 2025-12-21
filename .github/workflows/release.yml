@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 jobs:
-  # PHASE 1: Build binaries for all platforms
+  # PHASE 1: Build binaries and Packages
   build:
     name: Build ${{ matrix.platform.name }}
     runs-on: ${{ matrix.platform.os }}
@@ -30,11 +30,14 @@ jobs:
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary_name: zombrise_client
-            
+            # Optimization: Use fast linker for Linux
+            rustflags: "-C link-arg=-fuse-ld=lld"
+
           - name: Windows x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             binary_name: zombrise_client.exe
+            rustflags: "" # Default MSVC linker is fine
 
     steps:
       - name: Checkout code
@@ -56,54 +59,56 @@ jobs:
 
       - name: Install Linux dependencies
         if: matrix.platform.os == 'ubuntu-latest'
+        # Added 'lld' for faster linking
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config pigz
+          sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config pigz lld
+
+      - name: Install cargo-deb (Linux only)
+        if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
+        # We install this HERE so we can use the binary we are about to build
+        run: cargo install cargo-deb
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.platform.target }}
           cache-all-crates: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # Saving on release tags can be useful if deps change between main and release
+          save-if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
 
       - name: Build binary
+        env:
+          # Apply linker flags from matrix
+          RUSTFLAGS: ${{ matrix.platform.rustflags }}
         run: cargo build --release --bin zombrise_client --target ${{ matrix.platform.target }}
 
+      # --- ARCHIVE CREATION (Existing Logic) ---
       - name: Prepare Archive
         shell: bash
         run: |
-          # 1. Create unique staging directory
           STAGING="zombrise-${{ matrix.platform.target }}"
           mkdir -p "$STAGING"
-
-          # 2. Copy Binary
           cp "target/${{ matrix.platform.target }}/release/${{ matrix.platform.binary_name }}" "$STAGING/"
-
-          # 3. Copy Assets (Check root assets, then client/assets)
+          
           if [ -d "assets" ]; then
             cp -r assets "$STAGING/"
           elif [ -d "client/assets" ]; then
-            # Create assets dir inside staging to match structure
             mkdir -p "$STAGING/assets"
             cp -r client/assets/* "$STAGING/assets/"
           else
             echo "::warning::Assets not found!"
           fi
 
-          # 4. Create README
           cat > "$STAGING/README.txt" <<EOF
           Zombrise
           To run the game: ./${{ matrix.platform.binary_name }}
           EOF
 
-          # 5. Compress (use parallel compression for speed)
           if [ "${{ matrix.platform.os }}" = "windows-latest" ]; then
-            # Use 7z with multiple threads
             7z a -mmt=on "$STAGING.zip" "$STAGING"
             echo "ASSET=$STAGING.zip" >> $GITHUB_ENV
           else
-            # Use pigz (parallel gzip) if available, otherwise fallback to gzip
             if command -v pigz &> /dev/null; then
               tar -I pigz -cf "$STAGING.tar.gz" "$STAGING"
             else
@@ -112,68 +117,40 @@ jobs:
             echo "ASSET=$STAGING.tar.gz" >> $GITHUB_ENV
           fi
 
-      - name: Upload Artifact
+      # --- DEB PACKAGE CREATION (Moved here) ---
+      - name: Create .deb package (Linux only)
+        if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          # We must point cargo-deb to the workspace root or client crate depending on your structure
+          # Assuming 'client' folder based on previous script
+          cd client
+          
+          # --no-build reuses the binary we just compiled in the "Build binary" step
+          cargo deb --no-build --target x86_64-unknown-linux-gnu --output ../zombrise.deb
+
+          echo "DEB_ASSET=zombrise.deb" >> $GITHUB_ENV
+
+      # --- UPLOAD ---
+      - name: Upload Archive Artifact
         uses: actions/upload-artifact@v4
         with:
           name: zombrise-${{ matrix.platform.target }}
           path: ${{ env.ASSET }}
           if-no-files-found: error
 
-  # PHASE 2: Create .deb package for Linux
-  package-deb:
-    name: Create .deb Package
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-unknown-linux-gnu
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config
-
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: x86_64-unknown-linux-gnu
-          cache-all-crates: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Build binary
-        run: cargo build --release --bin zombrise_client --target x86_64-unknown-linux-gnu
-
-      - name: Create .deb package
-        run: |
-          cd client
-          cargo deb --no-build --target x86_64-unknown-linux-gnu
-          
-          # Find the generated .deb file
-          DEB_FILE=$(find target/x86_64-unknown-linux-gnu/debian -name "*.deb" -type f)
-          echo "DEB_FILE=$DEB_FILE" >> $GITHUB_ENV
-          
-          # Copy to a known location for upload
-          cp "$DEB_FILE" ../zombrise.deb
-
-      - name: Upload .deb artifact
+      - name: Upload Deb Artifact
+        if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
         uses: actions/upload-artifact@v4
         with:
           name: zombrise-deb
           path: zombrise.deb
           if-no-files-found: error
 
-  # PHASE 3: Create Release and Upload Assets
+  # PHASE 2: Create Release
   create-release:
     name: Create Release
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-    needs: [build, package-deb]
+    needs: [build] # Only depends on the one job now
     runs-on: ubuntu-latest
     steps:
       - name: Determine Tag
@@ -191,9 +168,6 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-
-      - name: List artifacts (debug)
-        run: ls -R artifacts
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
