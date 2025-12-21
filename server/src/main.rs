@@ -132,14 +132,14 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
         Collider::cuboid(56.0, 0.1, 56.0),
     ));
 
-    // Spawn trees with collision
+    // Spawn trees with collision - positioned at ground level (Y=0)
     let radius = 28.0;
     let tree_positions = [
-        Vec3::new(radius * 0.34, 1.0, radius * 0.4),
-        Vec3::new(-radius * 0.36, 1.0, -radius * 0.38),
-        Vec3::new(-radius * 0.12, 1.0, -radius * 0.55),
-        Vec3::new(radius * 0.55, 1.0, 0.22),
-        Vec3::new(-radius * 0.5, 1.0, 0.15),
+        Vec3::new(radius * 0.34, 0.0, radius * 0.4),
+        Vec3::new(-radius * 0.36, 0.0, -radius * 0.38),
+        Vec3::new(-radius * 0.12, 0.0, -radius * 0.55),
+        Vec3::new(radius * 0.55, 0.0, 0.22),
+        Vec3::new(-radius * 0.5, 0.0, 0.15),
     ];
 
     for position in tree_positions {

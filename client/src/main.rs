@@ -40,10 +40,13 @@ use zombrise_shared::zombie::zombie::{
 };
 
 mod map;
-use map::{spawn_snow_landscape, MapAssets, SnowLandscapeConfig};
+use map::{create_map_assets, spawn_snow_landscape, MapAssets};
 
 mod audio;
 use audio::GameAudioPlugin;
+
+mod snowflakes;
+use snowflakes::SnowfallPlugin;
 
 mod startup_screen;
 use startup_screen::{
@@ -87,6 +90,7 @@ fn main() {
         .add_plugins(TextInputPlugin)
         .add_plugins(SuduxuPlugin)
         .add_plugins(GameAudioPlugin)
+        .add_plugins(SnowfallPlugin)
         .init_state::<AppState>()
         .init_resource::<ServerConfig>()
         .insert_resource(CameraRotation {
@@ -255,6 +259,15 @@ fn setup_camera(mut commands: Commands) {
             },
             Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
             MainCamera,
+            // Atmospheric winter fog - gives depth to the snowy landscape
+            DistanceFog {
+                color: Color::srgba(0.70, 0.75, 0.82, 1.0), // Cold, bluish-grey fog
+                falloff: FogFalloff::Linear {
+                    start: 25.0, // No fog closer than this
+                    end: 100.0,  // Full fog at this distance
+                },
+                ..default()
+            },
         ))
         .id();
     println!("3D camera spawned (inactive): {:?}", camera_3d_entity);
@@ -320,34 +333,15 @@ fn spawn_map_visuals(
     query: Query<Entity, (Added<MapMarker>, Without<MapVisualsSpawned>)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
     mut map_assets_cache: Local<Option<MapAssets>>,
 ) {
-    let config = SnowLandscapeConfig::default();
-
     if map_assets_cache.is_none() {
-        let snow_material = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.94, 0.97, 1.0),
-            perceptual_roughness: 0.85,
-            metallic: 0.03,
-            reflectance: 0.55,
-            ..default()
-        });
-
-        let ice_material = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.68, 0.85, 0.99),
-            perceptual_roughness: 0.15,
-            metallic: 0.02,
-            reflectance: 0.95,
-            ..default()
-        });
-
-        *map_assets_cache = Some(MapAssets {
-            snow_mesh: meshes.add(Cylinder::new(config.radius, config.base_height)),
-            ice_mesh: meshes.add(Cylinder::new(config.ice_radius, config.base_height * 0.45)),
-            snow_material,
-            ice_material,
-            config,
-        });
+        *map_assets_cache = Some(create_map_assets(
+            &mut meshes,
+            &mut materials,
+            &asset_server,
+        ));
     }
 
     let Some(map_assets) = map_assets_cache.as_ref() else {
@@ -393,41 +387,49 @@ fn spawn_tree_visuals(
         commands
             .entity(entity)
             .insert((
-                Mesh3d(trunk_mesh.clone()),
-                MeshMaterial3d(bark_material.clone()),
                 Visibility::default(),
                 InheritedVisibility::default(),
                 ViewVisibility::default(),
                 TreeVisualsSpawned,
             ))
             .with_children(|parent| {
-                let mut lower_canopy = Transform::from_translation(Vec3::new(0.0, 1.05, 0.0));
+                // Trunk - offset upward so bottom sits at ground level (Y=0)
+                // Cylinder is 1.9 tall, so offset by half (0.95)
+                parent.spawn((
+                    Mesh3d(trunk_mesh.clone()),
+                    MeshMaterial3d(bark_material.clone()),
+                    Transform::from_translation(Vec3::new(0.0, 0.95, 0.0)),
+                    Visibility::default(),
+                    InheritedVisibility::default(),
+                    ViewVisibility::default(),
+                    Name::new("Tree Trunk"),
+                ));
+
+                // Lower canopy - positioned at top of trunk + canopy center
+                let mut lower_canopy = Transform::from_translation(Vec3::new(0.0, 2.0, 0.0));
                 lower_canopy.scale = Vec3::new(1.6, 1.15, 1.6);
 
                 parent.spawn((
-                    (
-                        Mesh3d(canopy_mesh.clone()),
-                        MeshMaterial3d(foliage_material.clone()),
-                        lower_canopy,
-                        Visibility::default(),
-                        InheritedVisibility::default(),
-                        ViewVisibility::default(),
-                    ),
+                    Mesh3d(canopy_mesh.clone()),
+                    MeshMaterial3d(foliage_material.clone()),
+                    lower_canopy,
+                    Visibility::default(),
+                    InheritedVisibility::default(),
+                    ViewVisibility::default(),
                     Name::new("Evergreen Foliage (Lower)"),
                 ));
 
-                let mut upper_canopy = Transform::from_translation(Vec3::new(0.0, 1.7, 0.0));
+                // Upper canopy
+                let mut upper_canopy = Transform::from_translation(Vec3::new(0.0, 2.65, 0.0));
                 upper_canopy.scale = Vec3::new(1.0, 1.1, 1.0);
 
                 parent.spawn((
-                    (
-                        Mesh3d(canopy_mesh.clone()),
-                        MeshMaterial3d(foliage_material.clone()),
-                        upper_canopy,
-                        Visibility::default(),
-                        InheritedVisibility::default(),
-                        ViewVisibility::default(),
-                    ),
+                    Mesh3d(canopy_mesh.clone()),
+                    MeshMaterial3d(foliage_material.clone()),
+                    upper_canopy,
+                    Visibility::default(),
+                    InheritedVisibility::default(),
+                    ViewVisibility::default(),
                     Name::new("Evergreen Foliage (Upper)"),
                 ));
             });
