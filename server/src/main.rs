@@ -86,6 +86,7 @@ fn main() {
                 update_attack_cooldown,
                 remove_dead_players,
                 remove_fallen_entities,
+                passive_health_regeneration,
             ),
         )
         .run();
@@ -542,6 +543,13 @@ fn handle_player_attack(
 
                     if zombie_health.current == 0.0 {
                         commands.entity(zombie_entity).despawn();
+                        // Reward player with max health increase
+                        if let Ok((_, _, _, mut attacker_health, _, _)) =
+                            player_query.get_mut(attacker_entity)
+                        {
+                            attacker_health.max += 5.0;
+                            attacker_health.current += 5.0; // Also heal the amount gained
+                        }
                     }
 
                     println!("Player attacked zombie at distance {}", distance);
@@ -549,6 +557,7 @@ fn handle_player_attack(
             }
 
             // Attack players
+            let mut killed_player_count = 0;
             for (entity, _, transform, mut health, mut damage_flash, _) in &mut player_query {
                 if entity != attacker_entity {
                     let distance = attacker_pos.distance(transform.translation);
@@ -581,8 +590,24 @@ fn handle_player_attack(
                         // Hit confirmed
                         health.current = (health.current - PLAYER_DAMAGE).max(0.0);
                         damage_flash.timer = 0.3;
+
+                        if health.current == 0.0 {
+                            killed_player_count += 1;
+                        }
+
                         println!("Player attacked another player at distance {}", distance);
                     }
+                }
+            }
+
+            if killed_player_count > 0 {
+                // Reward attacker with max health increase
+                if let Ok((_, _, _, mut attacker_health, _, _)) =
+                    player_query.get_mut(attacker_entity)
+                {
+                    let bonus = 10.0 * killed_player_count as f32;
+                    attacker_health.max += bonus;
+                    attacker_health.current += bonus; // Also heal the amount gained
                 }
             }
         }
@@ -661,6 +686,17 @@ fn update_attack_cooldown(mut query: Query<&mut PlayerAttackCooldown>, time: Res
             if cooldown.0 < 0.0 {
                 cooldown.0 = 0.0;
             }
+        }
+    }
+}
+
+fn passive_health_regeneration(mut query: Query<&mut Health, With<Player>>, time: Res<Time>) {
+    const REGEN_PER_SECOND: f32 = 1.0;
+
+    for mut health in &mut query {
+        if health.current > 0.0 && health.current < health.max {
+            health.current =
+                (health.current + REGEN_PER_SECOND * time.delta_secs()).min(health.max);
         }
     }
 }
