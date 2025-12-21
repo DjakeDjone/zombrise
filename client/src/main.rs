@@ -40,7 +40,7 @@ use zombrise_shared::zombie::zombie::{
 };
 
 mod map;
-use map::{spawn_snow_landscape, SnowLandscapeConfig};
+use map::{spawn_snow_landscape, MapAssets, SnowLandscapeConfig};
 
 mod audio;
 use audio::GameAudioPlugin;
@@ -320,7 +320,40 @@ fn spawn_map_visuals(
     query: Query<Entity, (Added<MapMarker>, Without<MapVisualsSpawned>)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut map_assets_cache: Local<Option<MapAssets>>,
 ) {
+    let config = SnowLandscapeConfig::default();
+
+    if map_assets_cache.is_none() {
+        let snow_material = materials.add(StandardMaterial {
+            base_color: Color::srgb(0.94, 0.97, 1.0),
+            perceptual_roughness: 0.85,
+            metallic: 0.03,
+            reflectance: 0.55,
+            ..default()
+        });
+
+        let ice_material = materials.add(StandardMaterial {
+            base_color: Color::srgb(0.68, 0.85, 0.99),
+            perceptual_roughness: 0.15,
+            metallic: 0.02,
+            reflectance: 0.95,
+            ..default()
+        });
+
+        *map_assets_cache = Some(MapAssets {
+            snow_mesh: meshes.add(Cylinder::new(config.radius, config.base_height)),
+            ice_mesh: meshes.add(Cylinder::new(config.ice_radius, config.base_height * 0.45)),
+            snow_material,
+            ice_material,
+            config,
+        });
+    }
+
+    let Some(map_assets) = map_assets_cache.as_ref() else {
+        return;
+    };
+
     for entity in query.iter() {
         commands.entity(entity).insert((
             Visibility::default(),
@@ -329,13 +362,7 @@ fn spawn_map_visuals(
             MapVisualsSpawned,
         ));
 
-        spawn_snow_landscape(
-            &mut commands,
-            &mut meshes,
-            &mut materials,
-            SnowLandscapeConfig::default(),
-            entity,
-        );
+        spawn_snow_landscape(&mut commands, map_assets, entity);
     }
 }
 

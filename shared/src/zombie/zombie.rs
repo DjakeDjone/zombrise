@@ -18,7 +18,7 @@ pub const ZOMBIE_SPEED: f32 = 2.0;
 pub const ZOMBIE_ANIMATION_SPEED_MULTIPLIER: f32 = 1.0;
 
 #[cfg(feature = "client")]
-#[derive(Component)]
+#[derive(Component, Clone, Debug)]
 pub struct ZombieAnimations {
     pub idle: AnimationNodeIndex,
     pub walking: AnimationNodeIndex,
@@ -27,6 +27,10 @@ pub struct ZombieAnimations {
     pub dying: AnimationNodeIndex,
     pub hit: AnimationNodeIndex,
 }
+
+#[cfg(feature = "client")]
+#[derive(Component, Default)]
+pub struct ZombieUpdateTimer(pub f32);
 
 /// Previous position
 #[cfg(feature = "client")]
@@ -145,6 +149,13 @@ pub fn spawn_zombie(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 #[cfg(feature = "client")]
+#[derive(Clone, Debug)]
+pub struct ZombieAnimationGraph {
+    pub handle: Handle<AnimationGraph>,
+    pub animations: ZombieAnimations,
+}
+
+#[cfg(feature = "client")]
 pub fn setup_zombie_animation(
     mut commands: Commands,
     mut animation_players: Query<(Entity, &mut AnimationPlayer), Added<AnimationPlayer>>,
@@ -152,26 +163,12 @@ pub fn setup_zombie_animation(
     mut graphs: ResMut<Assets<AnimationGraph>>,
     parent_query: Query<&ChildOf>,
     zombie_query: Query<Entity, With<Zombie>>,
+    mut graph_cache: Local<Option<ZombieAnimationGraph>>,
 ) {
     let config = ZombieAnimationConfig::default();
 
-    for (entity, mut player) in &mut animation_players {
-        // Find root zombie
-        let mut zombie_root = None;
-        let mut current = entity;
-        while let Ok(child_of) = parent_query.get(current) {
-            current = child_of.parent();
-            if zombie_query.get(current).is_ok() {
-                zombie_root = Some(current);
-                break;
-            }
-        }
-
-        // Skip if not zombie
-        let Some(zombie_entity) = zombie_root else {
-            continue;
-        };
-
+    // Initialize graph if not cached
+    if graph_cache.is_none() {
         let mut graph = AnimationGraph::new();
 
         let idle_node = graph.add_clip(
@@ -207,26 +204,54 @@ pub fn setup_zombie_animation(
 
         let graph_handle = graphs.add(graph);
 
-        // Smooth transitions
-        let mut transitions = AnimationTransitions::new();
-
-        // Start idle
-        transitions
-            .play(&mut player, idle_node, Duration::ZERO)
-            .repeat();
-
-        commands
-            .entity(entity)
-            .insert(AnimationGraphHandle(graph_handle))
-            .insert(ZombieAnimations {
+        *graph_cache = Some(ZombieAnimationGraph {
+            handle: graph_handle,
+            animations: ZombieAnimations {
                 idle: idle_node,
                 walking: walking_node,
                 running: running_node,
                 attacking: attacking_node,
                 dying: dying_node,
                 hit: hit_node,
-            })
+            },
+        });
+    }
+
+    let Some(cached_graph) = graph_cache.as_ref() else {
+        return;
+    };
+
+    for (entity, mut player) in &mut animation_players {
+        // Find root zombie
+        let mut zombie_root = None;
+        let mut current = entity;
+        while let Ok(child_of) = parent_query.get(current) {
+            current = child_of.parent();
+            if zombie_query.get(current).is_ok() {
+                zombie_root = Some(current);
+                break;
+            }
+        }
+
+        // Skip if not zombie
+        let Some(zombie_entity) = zombie_root else {
+            continue;
+        };
+
+        // Smooth transitions
+        let mut transitions = AnimationTransitions::new();
+
+        // Start idle
+        transitions
+            .play(&mut player, cached_graph.animations.idle, Duration::ZERO)
+            .repeat();
+
+        commands
+            .entity(entity)
+            .insert(AnimationGraphHandle(cached_graph.handle.clone()))
+            .insert(cached_graph.animations.clone())
             .insert(ZombieAnimationState::default())
+            .insert(ZombieUpdateTimer(rand::random::<f32>())) // Random offset
             .insert(ZombieRoot(zombie_entity))
             .insert(transitions);
     }
@@ -235,11 +260,13 @@ pub fn setup_zombie_animation(
 #[cfg(feature = "client")]
 pub fn update_zombie_animation_state(
     mut commands: Commands,
+    time: Res<Time>,
     mut anim_query: Query<(
         Entity,
         &mut ZombieAnimationState,
         &ZombieRoot,
         Option<&ZombiePrevPosition>,
+        &mut ZombieUpdateTimer,
     )>,
     zombie_query: Query<(&GlobalTransform, Option<&ZombieDamageFlash>), With<Zombie>>,
     player_query: Query<&GlobalTransform, With<crate::players::player::Player>>,
@@ -247,8 +274,13 @@ pub fn update_zombie_animation_state(
     const CHASE_RANGE: f32 = 10.0;
     const ATTACK_RANGE: f32 = 1.5;
     const MOVEMENT_THRESHOLD: f32 = 0.01; // Min velocity
+    const UPDATE_INTERVAL: f32 = 0.2; // Check every 200ms
 
-    for (entity, mut anim_state, zombie_root, prev_pos) in &mut anim_query {
+    for (entity, mut anim_state, zombie_root, prev_pos, mut timer) in &mut anim_query {
+        // Always update previous position for velocity calculation every frame?
+        // Actually, to correctly calculate velocity, we need per-frame updates or time-delta awareness.
+        // Let's keep position update per frame but AI decision throttled.
+
         // Get transform and damage flash from root zombie
         let Ok((zombie_transform, damage_flash)) = zombie_query.get(zombie_root.0) else {
             continue;
@@ -270,6 +302,14 @@ pub fn update_zombie_animation_state(
         commands
             .entity(entity)
             .insert(ZombiePrevPosition(zombie_pos));
+
+        // Throttle expensive distance checks
+        timer.0 += time.delta_secs();
+        if timer.0 < UPDATE_INTERVAL && !is_hit {
+            // If hit, react immediately
+            continue;
+        }
+        timer.0 = 0.0;
 
         // Find nearest player
         let mut nearest_distance = f32::MAX;
@@ -408,14 +448,8 @@ pub fn add_zombie_animation_events(
 
 #[cfg(feature = "client")]
 pub fn handle_zombie_animation_events(mut animation_events: MessageReader<ZombieAnimationEvent>) {
-    for event in animation_events.read() {
-        match event {
-            ZombieAnimationEvent::Footstep => {
-                println!("Zombie Footstep");
-            }
-            ZombieAnimationEvent::AttackHit => {
-                println!("Zombie Attack Hit");
-            }
-        }
+    // Process events but don't print
+    for _event in animation_events.read() {
+        // Handle specific events if needed regarding logic, but remove spammy logs
     }
 }
