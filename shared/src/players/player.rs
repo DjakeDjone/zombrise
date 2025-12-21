@@ -62,6 +62,14 @@ pub fn handle_input(
     camera_rotation: Option<Res<CameraRotation>>,
     player_attacking_query: Query<(&PlayerAttacking, &PlayerOwner)>,
     my_client_id: Res<MyClientId>,
+    player_transform_query: Query<
+        (&bevy::prelude::GlobalTransform, &PlayerOwner),
+        bevy::prelude::With<Player>,
+    >,
+    zombie_query: Query<
+        &bevy::prelude::GlobalTransform,
+        bevy::prelude::With<crate::zombie::zombie::Zombie>,
+    >,
 ) {
     let mut direction = Vec3::ZERO;
 
@@ -120,7 +128,7 @@ pub fn handle_input(
 
         if direction.length() > 0.0 {
             direction = direction.normalize();
-            let camera_yaw = camera_rotation.map(|r| r.yaw).unwrap_or(0.0);
+            let camera_yaw = camera_rotation.as_ref().map(|r| r.yaw).unwrap_or(0.0);
             move_events.write(MovePlayer {
                 direction,
                 camera_yaw,
@@ -132,6 +140,46 @@ pub fn handle_input(
         || suduxu_just_pressed(crate::suduxu::SuduxuButton::A)
     {
         if !is_attacking {
+            // Auto-aim at nearest zombie
+            let mut nearest_zombie_pos: Option<Vec3> = None;
+            let mut nearest_dist = 20.0; // Max auto-aim distance
+
+            // Find my position
+            if let Some((my_transform, _)) = player_transform_query
+                .iter()
+                .find(|(_, owner)| owner.0 == my_client_id.0)
+            {
+                let my_pos = my_transform.translation();
+
+                for zombie_transform in zombie_query.iter() {
+                    let dist = my_pos.distance(zombie_transform.translation());
+                    if dist < nearest_dist {
+                        nearest_dist = dist;
+                        nearest_zombie_pos = Some(zombie_transform.translation());
+                    }
+                }
+
+                if let Some(target_pos) = nearest_zombie_pos {
+                    let mut direction_to_target = (target_pos - my_pos).normalize_or_zero();
+                    direction_to_target.y = 0.0; // Flatten
+
+                    if direction_to_target.length_squared() > 0.0 {
+                        direction_to_target = direction_to_target.normalize();
+
+                        // Compensate for camera rotation
+                        let camera_yaw = camera_rotation.as_ref().map(|r| r.yaw).unwrap_or(0.0);
+                        let rotation_correction = bevy::math::Quat::from_rotation_y(-camera_yaw);
+                        let corrected_direction = rotation_correction * direction_to_target;
+
+                        // Send a move event just for rotation (small magnitude to avoid movement)
+                        move_events.write(MovePlayer {
+                            direction: corrected_direction * 0.02, // Just enough to trigger rotation (> 0.01)
+                            camera_yaw,
+                        });
+                    }
+                }
+            }
+
             attack_events.write(PlayerAttack);
         }
     }
