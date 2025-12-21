@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 zombrise_shared = { path = "../shared", features = ["client"] }
+game_audio = { path = "../game_audio" }
 bevy = { version = "0.17", default-features = false, features = [
     "bevy_asset",
     "bevy_scene",

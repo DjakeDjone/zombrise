@@ -42,6 +42,9 @@ use zombrise_shared::zombie::zombie::{
 mod map;
 use map::{spawn_snow_landscape, SnowLandscapeConfig};
 
+mod audio;
+use audio::GameAudioPlugin;
+
 mod startup_screen;
 use startup_screen::{
     cleanup_startup_screen, handle_copy_paste, handle_quick_connect_buttons, handle_startup_ui,
@@ -83,6 +86,7 @@ fn main() {
         .add_plugins(SharedPlugin)
         .add_plugins(TextInputPlugin)
         .add_plugins(SuduxuPlugin)
+        .add_plugins(GameAudioPlugin)
         .init_state::<AppState>()
         .init_resource::<ServerConfig>()
         .insert_resource(CameraRotation {
