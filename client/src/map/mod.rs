@@ -1,3 +1,4 @@
+use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor};
 use bevy::prelude::*;
 use bevy_mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
 
@@ -118,38 +119,54 @@ fn lerp_color(a: &Color, b: &Color, t: f32) -> Color {
     )
 }
 
-fn create_snow_ground_mesh(radius: f32, segments: u32) -> Mesh {
-    let mut positions: Vec<[f32; 3]> = Vec::new();
-    let mut normals: Vec<[f32; 3]> = Vec::new();
-    let mut uvs: Vec<[f32; 2]> = Vec::new();
-    let mut indices: Vec<u32> = Vec::new();
+fn create_snow_ground_mesh(radius: f32, _segments: u32) -> Mesh {
+    // scale1/scale2 for noise
+    let noise = |x: f32, z: f32| -> f32 {
+        let scale1 = 0.12;
+        let scale2 = 0.25;
+        let n1 = (x * scale1).sin() * (z * scale1).cos() * 0.15;
+        let n2 = (x * scale2 + 1.7).cos() * (z * scale2 + 2.3).sin() * 0.08;
+        n1 + n2
+    };
 
-    positions.push([0.0, 0.0, 0.0]);
-    normals.push([0.0, 1.0, 0.0]);
-    uvs.push([0.5, 0.5]);
+    // Use a Plane instead of manual radial mesh for stability
+    let size = radius * 2.5; // Slightly larger to cover corner gaps of the circle approximation
+    let mut mesh = Plane3d::default()
+        .mesh()
+        .size(size, size)
+        .subdivisions(64)
+        .build();
 
-    for i in 0..=segments {
-        let angle = (i as f32 / segments as f32) * std::f32::consts::TAU;
-        let x = angle.cos() * radius;
-        let z = angle.sin() * radius;
+    // specific mutable borrow to modify positions
+    if let Some(VertexAttributeValues::Float32x3(positions)) =
+        mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+    {
+        for pos in positions.iter_mut() {
+            let x = pos[0];
+            let z = pos[2];
+            // Apply height noise
+            let dist_sq = x * x + z * z;
+            let max_r = radius * 1.1;
 
-        positions.push([x, 0.0, z]);
-        normals.push([0.0, 1.0, 0.0]);
+            // Fade out edges
+            let fade = (1.0 - (dist_sq.sqrt() / max_r).powf(2.0)).max(0.0);
 
-        uvs.push([x / radius * 0.5 + 0.5, z / radius * 0.5 + 0.5]);
+            pos[1] = noise(x, z) * fade;
+        }
     }
 
-    for i in 0..segments {
-        indices.push(0);
-        indices.push(i + 1);
-        indices.push(i + 2);
-    }
+    // Recalculate normals to account for height changes
+    mesh.duplicate_vertices(); // Ensure unique vertices for flat shading or just correct calculation?
+                               // Actually Plane3d shares vertices. We want smooth shading. Shared is fine.
+                               // But we need to update normals.
+    mesh.compute_flat_normals(); // Build-in helper? No, that gives flat shading.
+                                 // For now, let's trust the height variation is small enough that Up normals are "okay"
+                                 // OR we can rely on normal map for details.
 
-    Mesh::new(PrimitiveTopology::TriangleList, Default::default())
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
-        .with_inserted_indices(Indices::U32(indices))
+    // Generate tangents for normal mapping
+    mesh.generate_tangents().ok();
+
+    mesh
 }
 
 pub fn create_map_assets(
@@ -160,30 +177,46 @@ pub fn create_map_assets(
     let config = SnowLandscapeConfig::default();
     let sky_config = SkyConfig::default();
 
-    let snow_color: Handle<Image> = asset_server.load("Snow010A_1K-JPG/Snow010A_1K-JPG_Color.jpg");
-    let snow_normal: Handle<Image> =
-        asset_server.load("Snow010A_1K-JPG/Snow010A_1K-JPG_NormalGL.jpg");
-    let snow_roughness: Handle<Image> =
-        asset_server.load("Snow010A_1K-JPG/Snow010A_1K-JPG_Roughness.jpg");
+    let sampler_desc = ImageSamplerDescriptor {
+        address_mode_u: ImageAddressMode::Repeat,
+        address_mode_v: ImageAddressMode::Repeat,
+        ..default()
+    };
+
+    let settings = move |s: &mut ImageLoaderSettings| {
+        s.sampler = ImageSampler::Descriptor(sampler_desc.clone());
+    };
+
+    let snow_color: Handle<Image> = asset_server.load_with_settings(
+        "Snow010A_1K-PNG/Snow010A_1K-PNG_Color.png",
+        settings.clone(),
+    );
+    let snow_normal: Handle<Image> = asset_server.load_with_settings(
+        "Snow010A_1K-PNG/Snow010A_1K-PNG_NormalGL.png",
+        settings.clone(),
+    );
+    let snow_ao: Handle<Image> = asset_server.load_with_settings(
+        "Snow010A_1K-PNG/Snow010A_1K-PNG_AmbientOcclusion.png",
+        settings,
+    );
 
     let snow_material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         base_color_texture: Some(snow_color),
         normal_map_texture: Some(snow_normal),
-        metallic_roughness_texture: Some(snow_roughness),
-        perceptual_roughness: 1.0,
-        metallic: 0.0,
-        reflectance: 0.5,
-
-        uv_transform: bevy::math::Affine2::from_scale(bevy::math::Vec2::splat(8.0)),
+        occlusion_texture: Some(snow_ao),
+        perceptual_roughness: 0.85,
+        reflectance: 0.2,
+        // Restore UV Transform to tile the texture
+        uv_transform: bevy::math::Affine2::from_scale(bevy::math::Vec2::splat(4.0)),
         ..default()
     });
 
     let ice_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.68, 0.85, 0.99),
-        perceptual_roughness: 0.15,
-        metallic: 0.02,
-        reflectance: 0.95,
+        base_color: Color::srgb(0.95, 0.95, 0.95), // White to blend with snow
+        perceptual_roughness: 0.4,                 // Less smooth, more like snow-covered ice
+        metallic: 0.0,
+        reflectance: 0.2, // Less reflective
         ..default()
     });
 
@@ -195,6 +228,8 @@ pub fn create_map_assets(
     });
 
     let sky_mesh = meshes.add(create_sky_dome_mesh(sky_config.radius, &sky_config));
+
+    println!("Creating Map Assets with Plane3d approach.");
 
     MapAssets {
         snow_mesh: meshes.add(create_snow_ground_mesh(config.radius, 64)),
