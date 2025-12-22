@@ -363,27 +363,20 @@ fn spawn_map_visuals(
 fn spawn_tree_visuals(
     mut commands: Commands,
     query: Query<(Entity, &Transform), (Added<TreeMarker>, Without<TreeVisualsSpawned>)>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
 ) {
-    let bark_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.25, 0.25, 0.25),
-        perceptual_roughness: 0.9,
-        ..default()
-    });
+    for (entity, transform) in query.iter() {
+        // Check if this is the giant corner tree (at radius * 0.9 ≈ 25.2)
+        let is_giant_tree = transform.translation.x > 24.0 && transform.translation.z > 24.0;
 
-    let foliage_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.98, 0.98, 0.98),
-        perceptual_roughness: 0.85,
-        metallic: 0.0,
-        reflectance: 0.1,
-        ..default()
-    });
+        let scale_factor = if is_giant_tree {
+            5.0 // Giant tree scale
+        } else {
+            // Use position as seed for deterministic random scale
+            let seed = (transform.translation.x.abs() + transform.translation.z.abs()) * 1000.0;
+            0.6 + (seed.sin().abs() * 0.8) // Range: 0.6 to 1.4
+        };
 
-    let trunk_mesh = meshes.add(Cylinder::new(0.12, 1.9));
-    let canopy_mesh = meshes.add(Sphere::new(0.9));
-
-    for (entity, _transform) in query.iter() {
         commands
             .entity(entity)
             .insert((
@@ -393,44 +386,14 @@ fn spawn_tree_visuals(
                 TreeVisualsSpawned,
             ))
             .with_children(|parent| {
-                // Trunk - offset upward so bottom sits at ground level (Y=0)
-                // Cylinder is 1.9 tall, so offset by half (0.95)
                 parent.spawn((
-                    Mesh3d(trunk_mesh.clone()),
-                    MeshMaterial3d(bark_material.clone()),
-                    Transform::from_translation(Vec3::new(0.0, 0.95, 0.0)),
+                    SceneRoot(asset_server.load("Pine Tree with Snow.glb#Scene0")),
                     Visibility::default(),
                     InheritedVisibility::default(),
                     ViewVisibility::default(),
-                    Name::new("Tree Trunk"),
-                ));
-
-                // Lower canopy - positioned at top of trunk + canopy center
-                let mut lower_canopy = Transform::from_translation(Vec3::new(0.0, 2.0, 0.0));
-                lower_canopy.scale = Vec3::new(1.6, 1.15, 1.6);
-
-                parent.spawn((
-                    Mesh3d(canopy_mesh.clone()),
-                    MeshMaterial3d(foliage_material.clone()),
-                    lower_canopy,
-                    Visibility::default(),
-                    InheritedVisibility::default(),
-                    ViewVisibility::default(),
-                    Name::new("Evergreen Foliage (Lower)"),
-                ));
-
-                // Upper canopy
-                let mut upper_canopy = Transform::from_translation(Vec3::new(0.0, 2.65, 0.0));
-                upper_canopy.scale = Vec3::new(1.0, 1.1, 1.0);
-
-                parent.spawn((
-                    Mesh3d(canopy_mesh.clone()),
-                    MeshMaterial3d(foliage_material.clone()),
-                    upper_canopy,
-                    Visibility::default(),
-                    InheritedVisibility::default(),
-                    ViewVisibility::default(),
-                    Name::new("Evergreen Foliage (Upper)"),
+                    Transform::from_scale(Vec3::splat(scale_factor)),
+                    GlobalTransform::default(),
+                    Name::new("Pine Tree with Snow"),
                 ));
             });
     }

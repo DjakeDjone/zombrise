@@ -136,11 +136,28 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     // Spawn trees with collision - positioned at ground level (Y=0)
     let radius = 28.0;
     let tree_positions = [
+        // Original trees
         Vec3::new(radius * 0.34, 0.0, radius * 0.4),
         Vec3::new(-radius * 0.36, 0.0, -radius * 0.38),
         Vec3::new(-radius * 0.12, 0.0, -radius * 0.55),
         Vec3::new(radius * 0.55, 0.0, 0.22),
         Vec3::new(-radius * 0.5, 0.0, 0.15),
+        // Additional trees for denser forest
+        Vec3::new(radius * 0.7, 0.0, radius * 0.65),
+        Vec3::new(-radius * 0.72, 0.0, radius * 0.58),
+        Vec3::new(radius * 0.15, 0.0, -radius * 0.78),
+        Vec3::new(-radius * 0.8, 0.0, -radius * 0.15),
+        Vec3::new(radius * 0.82, 0.0, -radius * 0.45),
+        Vec3::new(-radius * 0.25, 0.0, radius * 0.72),
+        Vec3::new(radius * 0.48, 0.0, -radius * 0.68),
+        Vec3::new(-radius * 0.62, 0.0, radius * 0.32),
+        Vec3::new(radius * 0.22, 0.0, radius * 0.85),
+        Vec3::new(-radius * 0.45, 0.0, -radius * 0.75),
+        Vec3::new(radius * 0.75, 0.0, radius * 0.18),
+        Vec3::new(-radius * 0.18, 0.0, radius * 0.45),
+        Vec3::new(radius * 0.38, 0.0, -radius * 0.22),
+        Vec3::new(-radius * 0.85, 0.0, radius * 0.08),
+        Vec3::new(radius * 0.05, 0.0, radius * 0.62),
     ];
 
     for position in tree_positions {
@@ -153,6 +170,16 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
             Collider::cylinder(0.3, 2.0),
         ));
     }
+
+    // Giant tree in the corner of the map
+    commands.spawn((
+        TreeMarker,
+        Replicated,
+        Transform::from_translation(Vec3::new(radius * 0.9, 0.0, radius * 0.9)),
+        GlobalTransform::default(),
+        RigidBody::Static,
+        Collider::cylinder(0.6, 4.0), // Larger collider for giant tree
+    ));
 
     println!("Server started on {}", public_addr);
 }
