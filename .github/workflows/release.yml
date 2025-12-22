@@ -70,10 +70,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config pigz lld
 
-      - name: Install cargo-deb (Linux only)
-        if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
-        # We install this HERE so we can use the binary we are about to build
-        run: cargo install cargo-deb
+      # - name: Install cargo-deb (Linux only)
+      #   if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
+      #   # We install this HERE so we can use the binary we are about to build
+      #   run: cargo install cargo-deb
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
@@ -124,18 +124,18 @@ jobs:
           fi
 
       # --- DEB PACKAGE CREATION (Moved here) ---
-      - name: Create .deb package (Linux only)
-        if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
-        run: |
-          # Cargo.toml expects the binary at target/release/zombrise_client
-          # But we built with --target, so it's in target/${{ matrix.platform.target }}/release/
-          mkdir -p target/release
-          cp "target/${{ matrix.platform.target }}/release/${{ matrix.platform.binary_name }}" "target/release/${{ matrix.platform.binary_name }}"
-
-          # Run cargo deb from workspace root so paths in Cargo.toml resolve correctly
-          cargo deb --no-build --target ${{ matrix.platform.target }} -p zombrise_client --output zombrise.deb
-
-          echo "DEB_ASSET=zombrise.deb" >> $GITHUB_ENV
+      # - name: Create .deb package (Linux only)
+      #   if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
+      #   run: |
+      #     # Cargo.toml expects the binary at target/release/zombrise_client
+      #     # But we built with --target, so it's in target/${{ matrix.platform.target }}/release/
+      #     mkdir -p target/release
+      #     cp "target/${{ matrix.platform.target }}/release/${{ matrix.platform.binary_name }}" "target/release/${{ matrix.platform.binary_name }}"
+      #
+      #     # Run cargo deb from workspace root so paths in Cargo.toml resolve correctly
+      #     cargo deb --no-build --target ${{ matrix.platform.target }} -p zombrise_client --output zombrise.deb
+      #
+      #     echo "DEB_ASSET=zombrise.deb" >> $GITHUB_ENV
 
       # --- UPLOAD ---
       - name: Upload Archive Artifact
@@ -145,13 +145,13 @@ jobs:
           path: ${{ env.ASSET }}
           if-no-files-found: error
 
-      - name: Upload Deb Artifact
-        if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
-        uses: actions/upload-artifact@v4
-        with:
-          name: zombrise-deb
-          path: zombrise.deb
-          if-no-files-found: error
+      # - name: Upload Deb Artifact
+      #   if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: zombrise-deb
+      #     path: zombrise.deb
+      #     if-no-files-found: error
 
   # PHASE 2: Create Release
   create-release:
