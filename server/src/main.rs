@@ -254,7 +254,7 @@ fn handle_move_player(
     mut query: Query<(&PlayerOwner, &mut LinearVelocity, &mut Transform)>,
     network_id_query: Query<&NetworkId>,
 ) {
-    let speed = 5.0;
+    let speed = 3.0;
     for FromClient {
         message: event,
         client_id,
