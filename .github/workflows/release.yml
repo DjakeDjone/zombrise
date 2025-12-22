@@ -128,12 +128,12 @@ jobs:
         if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
         run: |
           # Cargo.toml expects the binary at target/release/zombrise_client
-          # But we built with --target, so it's in target/x86_64-unknown-linux-gnu/release/
+          # But we built with --target, so it's in target/${{ matrix.platform.target }}/release/
           mkdir -p target/release
-          cp target/x86_64-unknown-linux-gnu/release/zombrise_client target/release/zombrise_client
+          cp "target/${{ matrix.platform.target }}/release/${{ matrix.platform.binary_name }}" "target/release/${{ matrix.platform.binary_name }}"
 
           # Run cargo deb from workspace root so paths in Cargo.toml resolve correctly
-          cargo deb --no-build --target x86_64-unknown-linux-gnu -p zombrise_client --output zombrise.deb
+          cargo deb --no-build --target ${{ matrix.platform.target }} -p zombrise_client --output zombrise.deb
 
           echo "DEB_ASSET=zombrise.deb" >> $GITHUB_ENV
 

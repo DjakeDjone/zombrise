@@ -54,12 +54,12 @@ section = "games"
 priority = "optional"
 assets = [
     [
-        "target/release/zombrise_client",
+        "../target/release/zombrise_client",
         "usr/bin/zombrise",
         "755",
     ],
     [
-        "client/assets/",
+        "assets/",
         "usr/share/zombrise/assets/",
         "644",
     ],
