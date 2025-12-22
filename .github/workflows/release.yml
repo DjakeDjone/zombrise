@@ -39,6 +39,12 @@ jobs:
             binary_name: zombrise_client.exe
             rustflags: "" # Default MSVC linker is fine
 
+          - name: macOS Apple Silicon
+            os: macos-latest
+            target: aarch64-apple-darwin
+            binary_name: zombrise_client
+            rustflags: ""
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -90,7 +96,7 @@ jobs:
           STAGING="zombrise-${{ matrix.platform.target }}"
           mkdir -p "$STAGING"
           cp "target/${{ matrix.platform.target }}/release/${{ matrix.platform.binary_name }}" "$STAGING/"
-          
+
           if [ -d "assets" ]; then
             cp -r assets "$STAGING/"
           elif [ -d "client/assets" ]; then
@@ -121,12 +127,13 @@ jobs:
       - name: Create .deb package (Linux only)
         if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
         run: |
-          # We must point cargo-deb to the workspace root or client crate depending on your structure
-          # Assuming 'client' folder based on previous script
-          cd client
-          
-          # --no-build reuses the binary we just compiled in the "Build binary" step
-          cargo deb --no-build --target x86_64-unknown-linux-gnu --output ../zombrise.deb
+          # Cargo.toml expects the binary at target/release/zombrise_client
+          # But we built with --target, so it's in target/x86_64-unknown-linux-gnu/release/
+          mkdir -p target/release
+          cp target/x86_64-unknown-linux-gnu/release/zombrise_client target/release/zombrise_client
+
+          # Run cargo deb from workspace root so paths in Cargo.toml resolve correctly
+          cargo deb --no-build --target x86_64-unknown-linux-gnu -p zombrise_client --output zombrise.deb
 
           echo "DEB_ASSET=zombrise.deb" >> $GITHUB_ENV
 
