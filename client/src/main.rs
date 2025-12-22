@@ -4,6 +4,7 @@ use bevy::ecs::hierarchy::ChildOf;
 use bevy::gltf::{
     GltfExtras, GltfMaterialExtras, GltfMaterialName, GltfMeshExtras, GltfMeshName, GltfSceneExtras,
 };
+
 use bevy::input::mouse::MouseMotion;
 use bevy::mesh::skinning::SkinnedMesh;
 use bevy::pbr::prelude::*;
@@ -322,10 +323,40 @@ fn setup(mut commands: Commands) {
 fn cleanup_playing_state(
     mut commands: Commands,
     health_ui_query: Query<Entity, With<HealthBarUI>>,
+    // Query for all game entities to clean up
+    game_entities: Query<
+        Entity,
+        Or<(
+            With<Player>,
+            With<Zombie>,
+            With<MapMarker>,
+            With<TreeMarker>,
+            With<PlayerVisualsSpawned>,
+            With<ZombieVisualsSpawned>,
+            With<TreeVisualsSpawned>,
+            With<MapVisualsSpawned>,
+        )>,
+    >,
 ) {
+    // Remove UI
     for entity in health_ui_query.iter() {
         commands.entity(entity).despawn();
     }
+
+    // Remove game entities
+    for entity in game_entities.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    // Remove network resources to ensure clean disconnection
+    commands.remove_resource::<RenetClient>();
+    commands.remove_resource::<NetcodeClientTransport>();
+    commands.remove_resource::<MyClientId>();
+
+    // Reset player dead state
+    commands.insert_resource(PlayerDied(false));
+
+    println!("Cleaned up playing state (entities and network resources)");
 }
 
 fn spawn_map_visuals(

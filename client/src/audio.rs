@@ -85,7 +85,7 @@ fn update_music_state(
     mut audio_state: ResMut<AudioState>,
     player_query: Query<(&GlobalTransform, &PlayerOwner, Option<&PlayerAttacking>), With<Player>>,
     zombie_query: Query<&GlobalTransform, With<Zombie>>,
-    my_client_id: Res<MyClientId>,
+    my_client_id: Option<Res<MyClientId>>,
     player_died: Res<PlayerDied>,
     state: Res<State<AppState>>,
 ) {
@@ -98,18 +98,19 @@ fn update_music_state(
             audio_state.time_since_last_check = Timer::from_seconds(1.0, TimerMode::Repeating);
         }
 
-        if *state.get() == AppState::StartupScreen || player_died.0 {
+        if *state.get() == AppState::StartupScreen || player_died.0 || my_client_id.is_none() {
             audio_state.target_intensity = Some(Intensity::Calm);
             return;
         }
 
+        let client_id = my_client_id.as_ref().unwrap();
         let mut my_pos = Vec3::ZERO;
         let mut found_me = false;
 
         let mut am_attacking = false;
 
         for (transform, owner, attacking) in player_query.iter() {
-            if owner.0 == my_client_id.0 {
+            if owner.0 == client_id.0 {
                 my_pos = transform.translation();
                 found_me = true;
                 if let Some(attack) = attacking {
