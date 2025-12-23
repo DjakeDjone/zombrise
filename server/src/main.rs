@@ -483,7 +483,7 @@ fn handle_player_attack(
         (
             Entity,
             &PlayerOwner,
-            &Transform,
+            &mut Transform,
             &mut Health,
             &mut DamageFlash,
             &mut PlayerAttackCooldown,
@@ -522,17 +522,70 @@ fn handle_player_attack(
         }
 
         if let Some((attacker_entity, attacker_transform)) = attacker_info {
-            let (_, _, _, _, _, mut cooldown) = player_query.get_mut(attacker_entity).unwrap();
-
-            if cooldown.0 > 0.0 {
-                continue;
+            // Check cooldown first
+            {
+                let (_, _, _, _, _, cooldown) = player_query.get(attacker_entity).unwrap();
+                if cooldown.0 > 0.0 {
+                    continue;
+                }
             }
 
-            // Reset cooldown
-            cooldown.0 = 0.5; // 0.5 seconds cooldown
+            let mut attacker_transform_final = attacker_transform.clone();
 
-            let attacker_pos = attacker_transform.translation;
-            let attacker_forward = *attacker_transform.forward();
+            // --- Auto-aim Logic ---
+            // Find closest target to rotate towards
+            let mut closest_target_pos: Option<Vec3> = None;
+            let mut closest_dist_sq = (ATTACK_RANGE * 1.5).powi(2); // slightly larger range for aim assist
+
+            // Check zombies
+            for (_, zombie_transform, _, _) in &zombie_query {
+                let d2 = attacker_transform
+                    .translation
+                    .distance_squared(zombie_transform.translation);
+                if d2 < closest_dist_sq {
+                    closest_dist_sq = d2;
+                    closest_target_pos = Some(zombie_transform.translation);
+                }
+            }
+
+            // Check other players
+            for (p_entity, _, p_transform, _, _, _) in &player_query {
+                if p_entity != attacker_entity {
+                    let d2 = attacker_transform
+                        .translation
+                        .distance_squared(p_transform.translation);
+                    if d2 < closest_dist_sq {
+                        closest_dist_sq = d2;
+                        closest_target_pos = Some(p_transform.translation);
+                    }
+                }
+            }
+
+            // If target found, rotate attacker
+            if let Some(target_pos) = closest_target_pos {
+                let diff = target_pos - attacker_transform.translation;
+                let horizontal_diff = Vec3::new(diff.x, 0.0, diff.z);
+
+                if horizontal_diff.length_squared() > 0.001 {
+                    let target_dir = horizontal_diff.normalize();
+                    let target_rotation = Quat::from_rotation_arc(Vec3::NEG_Z, target_dir);
+
+                    // Update transform in query and local copy
+                    if let Ok((_, _, mut t, _, _, _)) = player_query.get_mut(attacker_entity) {
+                        t.rotation = target_rotation;
+                        attacker_transform_final.rotation = target_rotation;
+                    }
+                }
+            }
+            // ----------------------
+
+            // Update cooldown (needs mutable access again)
+            if let Ok((_, _, _, _, _, mut cooldown)) = player_query.get_mut(attacker_entity) {
+                cooldown.0 = 0.5; // 0.5 seconds cooldown
+            }
+
+            let attacker_pos = attacker_transform_final.translation;
+            let attacker_forward = *attacker_transform_final.forward();
 
             // Attack zombies
             for (zombie_entity, zombie_transform, mut zombie_health, mut zombie_damage_flash) in

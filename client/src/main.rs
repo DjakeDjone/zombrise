@@ -173,9 +173,6 @@ fn main() {
             Update,
             (
                 setup_player_animation,
-                update_player_animation_state,
-                update_player_prev_positions,
-                control_player_animation,
                 trigger_player_attack_animation,
                 update_player_attack_timer,
                 update_player_idle_variations,
@@ -186,6 +183,12 @@ fn main() {
                 handle_death_screen_input,
                 handle_escape_key,
                 handle_lock_key,
+                (
+                    update_player_animation_state,
+                    control_player_animation,
+                    update_player_prev_positions,
+                )
+                    .chain(),
             )
                 .run_if(in_state(AppState::Playing)),
         )
