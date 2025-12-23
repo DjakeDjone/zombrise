@@ -38,7 +38,7 @@ use zombrise_shared::suduxu::SuduxuPlugin;
 use zombrise_shared::zombie::zombie::{
     add_zombie_animation_events, control_zombie_animation, handle_zombie_animation_events,
     setup_zombie_animation, update_zombie_animation_state, Zombie, ZombieAnimationEvent,
-    ZombieAnimationEventsState,
+    ZombieAnimationEventsState, ZombieLink,
 };
 
 mod map;
@@ -155,18 +155,19 @@ fn main() {
             Update,
             (
                 client_event_system,
-                handle_input,
-                handle_camera_rotation,
-                camera_follow,
+                (handle_camera_rotation, handle_input, camera_follow).chain(),
                 spawn_player_visuals,
                 spawn_map_visuals,
                 spawn_zombie_visuals,
+                update_zombie_visuals_transform,
+                cleanup_orphaned_zombie_visuals,
                 setup_zombie_animation,
                 update_zombie_animation_state,
                 control_zombie_animation,
                 add_zombie_animation_events,
                 handle_zombie_animation_events,
                 spawn_tree_visuals,
+                fix_zombie_frustum_culling,
             )
                 .run_if(in_state(AppState::Playing)),
         )
@@ -339,6 +340,7 @@ fn cleanup_playing_state(
             With<ZombieVisualsSpawned>,
             With<TreeVisualsSpawned>,
             With<MapVisualsSpawned>,
+            With<ZombieVisual>, // Also clean up detached visuals
         )>,
     >,
 ) {
@@ -466,12 +468,16 @@ fn spawn_player_visuals(
     }
 }
 
+#[derive(Component)]
+pub struct ZombieVisual;
+
 fn spawn_zombie_visuals(
     mut commands: Commands,
-    query: Query<Entity, (Added<Zombie>, Without<ZombieVisualsSpawned>)>,
+    query: Query<(Entity, &Transform), (Added<Zombie>, Without<ZombieVisualsSpawned>)>,
     asset_server: Res<AssetServer>,
 ) {
-    for entity in query.iter() {
+    for (entity, transform) in query.iter() {
+        // Mark the logic entity as having visuals to prevent duplicate processing
         commands.entity(entity).insert((
             ZombieVisualsSpawned,
             Visibility::default(),
@@ -479,19 +485,81 @@ fn spawn_zombie_visuals(
             ViewVisibility::default(),
         ));
 
-        // Offset model to align with collider
-        commands.entity(entity).with_children(|parent| {
-            parent.spawn((
-                SceneRoot(asset_server.load("zombie.glb#Scene0")),
-                Visibility::default(),
-                InheritedVisibility::default(),
-                ViewVisibility::default(),
-                Transform::from_translation(Vec3::new(0.0, -0.75, 0.0))
-                    .with_rotation(Quat::from_rotation_y(std::f32::consts::PI)),
-                GlobalTransform::default(),
-            ));
-        });
+        // Spawn a separate entity for the visual mesh to allow smooth interpolation
+        // unrelated to the network snap updates on the main zombie entity.
+        commands.spawn((
+            SceneRoot(asset_server.load("zombie.glb#Scene0")),
+            Visibility::default(),
+            InheritedVisibility::default(),
+            ViewVisibility::default(),
+            // Start at the zombie's current position
+            Transform::from_translation(transform.translation + Vec3::new(0.0, -0.75, 0.0))
+                .with_rotation(transform.rotation * Quat::from_rotation_y(std::f32::consts::PI)),
+            GlobalTransform::default(),
+            ZombieVisual,
+            ZombieLink(entity),
+        ));
     }
+}
+
+fn update_zombie_visuals_transform(
+    mut visual_query: Query<(&mut Transform, &ZombieLink), With<ZombieVisual>>,
+    zombie_query: Query<&Transform, (With<Zombie>, Without<ZombieVisual>)>,
+    time: Res<Time>,
+) {
+    for (mut visual_transform, link) in visual_query.iter_mut() {
+        if let Ok(target_transform) = zombie_query.get(link.0) {
+            // Target position (with offset)
+            // Note: The offset was applied in spawn_zombie_visuals:
+            // Translation: zombie.translation + (0.0, -0.75, 0.0)
+            // Rotation: zombie.rotation * PI_Y
+
+            let target_translation = target_transform.translation + Vec3::new(0.0, -0.75, 0.0);
+            let target_rotation =
+                target_transform.rotation * Quat::from_rotation_y(std::f32::consts::PI);
+
+            // Interpolation speed
+            let t = time.delta_secs() * 10.0; // Adjustable smoothness
+
+            // Interpolate position
+            visual_transform.translation = visual_transform.translation.lerp(target_translation, t);
+
+            // Interpolate rotation
+            visual_transform.rotation = visual_transform.rotation.slerp(target_rotation, t);
+
+            // Snap if too far (teleport)
+            if visual_transform.translation.distance(target_translation) > 2.0 {
+                visual_transform.translation = target_translation;
+                visual_transform.rotation = target_rotation;
+            }
+        }
+    }
+}
+
+fn cleanup_orphaned_zombie_visuals(
+    mut commands: Commands,
+    visual_query: Query<(Entity, &ZombieLink), With<ZombieVisual>>,
+    zombie_query: Query<Entity, With<Zombie>>,
+    children_query: Query<&Children>,
+) {
+    for (entity, link) in visual_query.iter() {
+        if !zombie_query.contains(link.0) {
+            despawn_with_children_recursive(&mut commands, entity, &children_query);
+        }
+    }
+}
+
+fn despawn_with_children_recursive(
+    commands: &mut Commands,
+    entity: Entity,
+    children_query: &Query<&Children>,
+) {
+    if let Ok(children) = children_query.get(entity) {
+        for child in children.iter() {
+            despawn_with_children_recursive(commands, child, children_query);
+        }
+    }
+    commands.entity(entity).despawn();
 }
 
 fn camera_follow(
@@ -736,6 +804,36 @@ fn display_health_bar(
             } else {
                 Color::srgb(1.0, 0.2, 0.2)
             };
+        }
+    }
+}
+
+fn fix_zombie_frustum_culling(
+    mut commands: Commands,
+    skinned_mesh_query: Query<Entity, Added<SkinnedMesh>>,
+    parent_query: Query<&ChildOf>,
+    zombie_query: Query<Entity, With<ZombieVisual>>, // Updated to check ZombieVisual
+) {
+    for entity in skinned_mesh_query.iter() {
+        // Check if this mesh belongs to a zombie
+        let mut current = entity;
+        let mut is_zombie = false;
+
+        // Traverse up to find ZombieVisual component (since mesh is now child of Visual)
+        while let Ok(child_of) = parent_query.get(current) {
+            current = child_of.parent();
+            if zombie_query.contains(current) {
+                is_zombie = true;
+                break;
+            }
+        }
+
+        if is_zombie {
+            // Expand AABB to prevent culling issues
+            commands.entity(entity).insert(Aabb {
+                center: Vec3::new(0.0, 1.0, 0.0).into(),
+                half_extents: Vec3::splat(1.5).into(),
+            });
         }
     }
 }

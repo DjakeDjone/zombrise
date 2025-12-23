@@ -42,6 +42,11 @@ pub struct ZombiePrevPosition(pub Vec3);
 #[derive(Component)]
 pub struct ZombieRoot(pub Entity);
 
+/// Link from visual to logic entity
+#[cfg(feature = "client")]
+#[derive(Component)]
+pub struct ZombieLink(pub Entity);
+
 #[cfg(feature = "client")]
 #[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ZombieAnimationState {
@@ -163,6 +168,7 @@ pub fn setup_zombie_animation(
     mut graphs: ResMut<Assets<AnimationGraph>>,
     parent_query: Query<&ChildOf>,
     zombie_query: Query<Entity, With<Zombie>>,
+    zombie_link_query: Query<&ZombieLink>,
     mut graph_cache: Local<Option<ZombieAnimationGraph>>,
 ) {
     let config = ZombieAnimationConfig::default();
@@ -227,9 +233,15 @@ pub fn setup_zombie_animation(
         let mut current = entity;
         while let Ok(child_of) = parent_query.get(current) {
             current = child_of.parent();
-            if zombie_query.get(current).is_ok() {
+            if zombie_query.contains(current) {
                 zombie_root = Some(current);
                 break;
+            }
+            if let Ok(link) = zombie_link_query.get(current) {
+                if zombie_query.contains(link.0) {
+                    zombie_root = Some(link.0);
+                    break;
+                }
             }
         }
 
@@ -267,8 +279,9 @@ pub fn update_zombie_animation_state(
         &ZombieRoot,
         Option<&ZombiePrevPosition>,
         &mut ZombieUpdateTimer,
+        &GlobalTransform,
     )>,
-    zombie_query: Query<(&GlobalTransform, Option<&ZombieDamageFlash>), With<Zombie>>,
+    zombie_query: Query<Option<&ZombieDamageFlash>, With<Zombie>>,
     player_query: Query<&GlobalTransform, With<crate::players::player::Player>>,
 ) {
     const CHASE_RANGE: f32 = 10.0;
@@ -276,16 +289,20 @@ pub fn update_zombie_animation_state(
     const MOVEMENT_THRESHOLD: f32 = 0.01; // Min velocity
     const UPDATE_INTERVAL: f32 = 0.2; // Check every 200ms
 
-    for (entity, mut anim_state, zombie_root, prev_pos, mut timer) in &mut anim_query {
+    for (entity, mut anim_state, zombie_root, prev_pos, mut timer, global_transform) in
+        &mut anim_query
+    {
         // Always update previous position for velocity calculation every frame?
         // Actually, to correctly calculate velocity, we need per-frame updates or time-delta awareness.
         // Let's keep position update per frame but AI decision throttled.
 
-        // Get transform and damage flash from root zombie
-        let Ok((zombie_transform, damage_flash)) = zombie_query.get(zombie_root.0) else {
+        // Get damage flash from root zombie (logic entity)
+        let Ok(damage_flash) = zombie_query.get(zombie_root.0) else {
             continue;
         };
-        let zombie_pos = zombie_transform.translation();
+
+        // Use the visual transform (this entity) for smooth position/velocity
+        let zombie_pos = global_transform.translation();
 
         // Check if zombie is being hit (damage flash is active)
         let is_hit = damage_flash.map(|df| df.timer > 0.0).unwrap_or(false);
