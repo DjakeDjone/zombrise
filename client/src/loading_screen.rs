@@ -3,6 +3,7 @@ use bevy::gltf::Gltf;
 use bevy::prelude::*;
 
 use crate::startup_screen::AppState;
+use zombrise_shared::players::player_animation::PlayerAnimationConfig;
 
 #[derive(Component)]
 pub struct LoadingScreenMarker;
@@ -17,6 +18,10 @@ pub struct LoadingStatusText;
 #[derive(Resource, Default)]
 pub struct GameAssets {
     pub zombie_model: Handle<Gltf>,
+    pub player_idle: Handle<AnimationClip>,
+    pub player_idle_nervous: Handle<AnimationClip>,
+    pub player_walking: Handle<AnimationClip>,
+    pub player_attacking: Handle<AnimationClip>,
     pub loading_complete: bool,
 }
 
@@ -32,16 +37,25 @@ pub fn start_loading_assets(mut commands: Commands, asset_server: Res<AssetServe
     println!("=== START_LOADING_ASSETS ===");
 
     // Load assets
+    let config = PlayerAnimationConfig::default();
     let zombie_model: Handle<Gltf> = asset_server.load("zombie.glb");
+    let player_idle = asset_server.load(config.idle_animation.path);
+    let player_idle_nervous = asset_server.load(config.idle_nervous_animation.path);
+    let player_walking = asset_server.load(config.walking_animation.path);
+    let player_attacking = asset_server.load(config.attacking_animation.path);
 
     commands.insert_resource(GameAssets {
         zombie_model,
+        player_idle,
+        player_idle_nervous,
+        player_walking,
+        player_attacking,
         loading_complete: false,
     });
 
     commands.insert_resource(LoadingProgress {
         assets_loaded: 0,
-        total_assets: 1,
+        total_assets: 5,
     });
 
     println!("=== ASSETS QUEUED FOR LOADING ===");
@@ -134,28 +148,33 @@ pub fn check_loading_progress(
 
     // Check asset states
     let zombie_state = asset_server.get_load_state(&game_assets.zombie_model);
+    let idle_state = asset_server.get_load_state(&game_assets.player_idle);
+    let idle_nervous_state = asset_server.get_load_state(&game_assets.player_idle_nervous);
+    let walking_state = asset_server.get_load_state(&game_assets.player_walking);
+    let attacking_state = asset_server.get_load_state(&game_assets.player_attacking);
+
+    let states = [
+        zombie_state,
+        idle_state,
+        idle_nervous_state,
+        walking_state,
+        attacking_state,
+    ];
 
     let mut loaded_count = 0;
-    let current_status: &str;
 
-    match zombie_state {
-        Some(LoadState::Loaded) => {
+    // Count loaded assets
+    for state in states.iter() {
+        if matches!(state, Some(LoadState::Loaded)) {
             loaded_count += 1;
-            current_status = "Zombie model loaded!";
-        }
-        Some(LoadState::Loading) => {
-            current_status = "Loading zombie model...";
-        }
-        Some(LoadState::Failed(_)) => {
-            current_status = "Failed to load zombie model!";
-        }
-        Some(LoadState::NotLoaded) => {
-            current_status = "Waiting for zombie model...";
-        }
-        None => {
-            current_status = "Initializing...";
         }
     }
+
+    let current_status = if loaded_count == 0 {
+        "Starting load...".to_string()
+    } else {
+        format!("Loading assets ({} / 5)...", loaded_count)
+    };
 
     progress.assets_loaded = loaded_count;
 
@@ -170,7 +189,7 @@ pub fn check_loading_progress(
     }
 
     if let Ok(mut text) = status_text_query.single_mut() {
-        text.0 = current_status.to_string();
+        text.0 = current_status;
     }
 
     if progress.assets_loaded >= progress.total_assets {

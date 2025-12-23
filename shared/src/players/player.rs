@@ -13,6 +13,9 @@ use bevy::{
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "client")]
+use bevy::prelude::Time;
+
+#[cfg(feature = "client")]
 use super::player_animation::PlayerAttacking;
 
 #[derive(Component, Serialize, Deserialize, Reflect)]
@@ -36,6 +39,16 @@ pub struct PlayerAttackCooldown(pub f32);
 #[cfg(feature = "client")]
 #[derive(bevy::prelude::Resource, Default)]
 pub struct MyClientId(pub u64);
+
+/// Component to store the predicted local position of the player to avoid jitter from server updates
+#[cfg(feature = "client")]
+#[derive(Component, Default)]
+pub struct LocalPlayerPosition(pub Vec3);
+
+/// Component to store the predicted local rotation of the player
+#[cfg(feature = "client")]
+#[derive(Component, Default)]
+pub struct LocalPlayerRotation(pub bevy::math::Quat);
 
 #[derive(Event, Message, Serialize, Deserialize)]
 pub struct MovePlayer {
@@ -66,10 +79,20 @@ pub fn handle_input(
         (&bevy::prelude::GlobalTransform, &PlayerOwner),
         bevy::prelude::With<Player>,
     >,
+    mut local_player_query: Query<
+        (
+            &mut bevy::prelude::Transform,
+            Option<&mut LocalPlayerPosition>,
+            Option<&mut LocalPlayerRotation>,
+            &PlayerOwner,
+        ),
+        bevy::prelude::With<Player>,
+    >,
     zombie_query: Query<
         &bevy::prelude::GlobalTransform,
         bevy::prelude::With<crate::zombie::zombie::Zombie>,
     >,
+    time: Res<Time>,
 ) {
     let mut direction = Vec3::ZERO;
 
@@ -133,6 +156,73 @@ pub fn handle_input(
                 direction,
                 camera_yaw,
             });
+
+            // Client-side prediction
+            let speed = 3.0;
+            let yaw_rotation = bevy::math::Quat::from_rotation_y(camera_yaw);
+            let rotated_direction = yaw_rotation * direction;
+
+            for (mut transform, local_pos_opt, local_rot_opt, owner) in &mut local_player_query {
+                if owner.0 == my_client_id.0 {
+                    // Update Position
+                    if let Some(mut local_pos) = local_pos_opt {
+                        // Soft reconciliation for position
+                        let server_pos = transform.translation;
+                        if local_pos.0.distance(server_pos) > 5.0 {
+                            local_pos.0 = server_pos;
+                        }
+
+                        // Apply client movement
+                        local_pos.0 += rotated_direction * speed * time.delta_secs();
+                        transform.translation = local_pos.0;
+                    } else {
+                        transform.translation += rotated_direction * speed * time.delta_secs();
+                    }
+
+                    // Update Rotation
+                    if let Some(mut local_rot) = local_rot_opt {
+                        // Rotation logic
+                        let horizontal_direction =
+                            Vec3::new(rotated_direction.x, 0.0, rotated_direction.z);
+
+                        if horizontal_direction.length() > 0.01 {
+                            let target_rotation = bevy::math::Quat::from_rotation_arc(
+                                Vec3::NEG_Z,
+                                horizontal_direction.normalize(),
+                            );
+                            local_rot.0 = target_rotation;
+                        }
+
+                        // Always apply local rotation to prevent server snap
+                        transform.rotation = local_rot.0;
+                    } else {
+                        // Fallback if component missing
+                        let horizontal_direction =
+                            Vec3::new(rotated_direction.x, 0.0, rotated_direction.z);
+                        if horizontal_direction.length() > 0.01 {
+                            let target_rotation = bevy::math::Quat::from_rotation_arc(
+                                Vec3::NEG_Z,
+                                horizontal_direction.normalize(),
+                            );
+                            transform.rotation = target_rotation;
+                        }
+                    }
+                }
+            }
+        } else {
+            // Not moving - still need to apply local position and rotation to prevent server snap
+            for (mut transform, local_pos_opt, local_rot_opt, owner) in &mut local_player_query {
+                if owner.0 == my_client_id.0 {
+                    // Apply local position to prevent server position snap
+                    if let Some(local_pos) = local_pos_opt {
+                        transform.translation = local_pos.0;
+                    }
+                    // Apply local rotation to prevent server rotation snap
+                    if let Some(local_rot) = local_rot_opt {
+                        transform.rotation = local_rot.0;
+                    }
+                }
+            }
         }
     }
 

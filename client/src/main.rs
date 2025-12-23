@@ -25,7 +25,8 @@ use std::{
 };
 use zombrise_shared::entity2::Health;
 use zombrise_shared::players::player::{
-    handle_input, CameraRotation, DamageFlash, MainCamera, MyClientId, Player, PlayerOwner,
+    handle_input, CameraRotation, DamageFlash, LocalPlayerPosition, LocalPlayerRotation,
+    MainCamera, MyClientId, Player, PlayerOwner,
 };
 use zombrise_shared::players::player_animation::{
     control_player_animation, setup_player_animation, trigger_player_attack_animation,
@@ -435,12 +436,14 @@ fn spawn_tree_visuals(
 
 fn spawn_player_visuals(
     mut commands: Commands,
-    query: Query<Entity, (Added<Player>, Without<PlayerVisualsSpawned>)>,
+    query: Query<(Entity, &Transform), (Added<Player>, Without<PlayerVisualsSpawned>)>,
     asset_server: Res<AssetServer>,
 ) {
-    for entity in query.iter() {
+    for (entity, transform) in query.iter() {
         commands.entity(entity).insert((
             PlayerVisualsSpawned,
+            LocalPlayerPosition(transform.translation),
+            LocalPlayerRotation(transform.rotation),
             PlayerAttacking::default(),
             Visibility::default(),
             InheritedVisibility::default(),
