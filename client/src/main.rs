@@ -155,7 +155,13 @@ fn main() {
             Update,
             (
                 client_event_system,
-                (handle_camera_rotation, handle_input, camera_follow).chain(),
+                (
+                    handle_client_auto_aim,
+                    handle_camera_rotation,
+                    handle_input,
+                    camera_follow,
+                )
+                    .chain(),
                 spawn_player_visuals,
                 spawn_map_visuals,
                 spawn_zombie_visuals,
@@ -562,8 +568,67 @@ fn despawn_with_children_recursive(
     commands.entity(entity).despawn();
 }
 
-// Player rotation is handled entirely by the server via auto-aim
-// No client-side rotation to avoid flickering from client/server conflict
+fn handle_client_auto_aim(
+    mut player_query: Query<(Entity, &mut Transform, &PlayerOwner), With<Player>>,
+    mut local_rot_query: Query<&mut LocalPlayerRotation>,
+    zombie_query: Query<&Transform, (With<Zombie>, Without<Player>)>,
+    player_attacking_query: Query<(&PlayerAttacking, &PlayerOwner)>,
+    my_client_id: Res<MyClientId>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    suduxu_input: Option<Res<ButtonInput<zombrise_shared::suduxu::SuduxuButton>>>,
+) {
+    let suduxu_clicked = suduxu_input.map_or(false, |s| {
+        s.just_pressed(zombrise_shared::suduxu::SuduxuButton::A)
+    });
+
+    if keyboard_input.just_pressed(KeyCode::Space) || suduxu_clicked {
+        let mut local_player_data = None;
+        for (entity, transform, owner) in &mut player_query {
+            if owner.0 == my_client_id.0 {
+                local_player_data = Some((entity, transform));
+                break;
+            }
+        }
+
+        if let Some((entity, mut transform)) = local_player_data {
+            // Check attacking state
+            let is_attacking = player_attacking_query
+                .iter()
+                .any(|(a, o)| o.0 == my_client_id.0 && a.is_attacking);
+            if is_attacking {
+                return;
+            }
+
+            // Find closest zombie
+            let mut closest_dist_sq = 100.0; // 10.0^2 range (matches server)
+            let mut target_pos = None;
+
+            for zombie_transform in &zombie_query {
+                let dist_sq = transform
+                    .translation
+                    .distance_squared(zombie_transform.translation);
+                if dist_sq < closest_dist_sq {
+                    closest_dist_sq = dist_sq;
+                    target_pos = Some(zombie_transform.translation);
+                }
+            }
+
+            if let Some(pos) = target_pos {
+                let diff = pos - transform.translation;
+                let horizontal_diff = Vec3::new(diff.x, 0.0, diff.z);
+                if horizontal_diff.length_squared() > 0.001 {
+                    let target_rotation =
+                        Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_diff.normalize());
+                    transform.rotation = target_rotation;
+
+                    if let Ok(mut local_rot) = local_rot_query.get_mut(entity) {
+                        local_rot.0 = target_rotation;
+                    }
+                }
+            }
+        }
+    }
+}
 
 fn camera_follow(
     player_query: Query<(&Transform, &PlayerOwner), (With<Player>, Without<MainCamera>)>,

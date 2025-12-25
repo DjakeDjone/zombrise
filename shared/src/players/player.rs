@@ -74,7 +74,7 @@ pub fn handle_input(
     my_client_id: Res<MyClientId>,
     mut local_player_query: Query<
         (
-            &bevy::prelude::Transform,
+            &mut bevy::prelude::Transform,
             Option<&mut LocalPlayerPosition>,
             Option<&mut LocalPlayerRotation>,
             &PlayerOwner,
@@ -134,7 +134,7 @@ pub fn handle_input(
 
     // Sync local state FROM server (position and rotation come from server via replication)
     // This allows server-side auto-aim rotation to be visible on client
-    for (transform, local_pos_opt, local_rot_opt, owner) in &mut local_player_query {
+    for (mut transform, local_pos_opt, local_rot_opt, owner) in &mut local_player_query {
         if owner.0 == my_client_id.0 {
             // Sync local_pos from server
             if let Some(mut local_pos) = local_pos_opt {
@@ -142,7 +142,13 @@ pub fn handle_input(
             }
             // Sync local_rot from server (so server auto-aim works)
             if let Some(mut local_rot) = local_rot_opt {
-                local_rot.0 = transform.rotation;
+                if is_attacking {
+                    // PRIORITIZE local prediction when attacking to disable jitter from server updates
+                    // The client auto-aim system sets local_rot, so we enforce it on the transform here
+                    transform.rotation = local_rot.0;
+                } else {
+                    local_rot.0 = transform.rotation;
+                }
             }
         }
     }
