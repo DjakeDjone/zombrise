@@ -832,7 +832,7 @@ fn fix_zombie_frustum_culling(
             // Expand AABB to prevent culling issues
             commands.entity(entity).insert(Aabb {
                 center: Vec3::new(0.0, 1.0, 0.0).into(),
-                half_extents: Vec3::splat(1.5).into(),
+                half_extents: Vec3::splat(5.0).into(),
             });
         }
     }
