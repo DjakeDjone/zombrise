@@ -562,6 +562,9 @@ fn despawn_with_children_recursive(
     commands.entity(entity).despawn();
 }
 
+// Player rotation is handled entirely by the server via auto-aim
+// No client-side rotation to avoid flickering from client/server conflict
+
 fn camera_follow(
     player_query: Query<(&Transform, &PlayerOwner), (With<Player>, Without<MainCamera>)>,
     mut camera_query: Query<&mut Transform, With<MainCamera>>,

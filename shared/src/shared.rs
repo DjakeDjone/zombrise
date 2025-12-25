@@ -29,6 +29,6 @@ impl Plugin for SharedPlugin {
         app.replicate::<MapMarker>();
         app.replicate::<TreeMarker>();
         app.add_client_message::<MovePlayer>(Channel::Unreliable);
-        app.add_client_message::<PlayerAttack>(Channel::Unreliable);
+        app.add_client_message::<PlayerAttack>(Channel::Ordered);
     }
 }

@@ -501,9 +501,10 @@ fn handle_player_attack(
     const ATTACK_RANGE: f32 = 2.0;
     const ATTACK_ANGLE: f32 = 0.5; // ~60 degrees half-angle
     const PLAYER_DAMAGE: f32 = 10.0;
-    const ZOMBIE_DAMAGE: f32 = 20.0;
+    const ZOMBIE_DAMAGE: f32 = 50.0; // 2 hits to kill a zombie
 
     for FromClient { client_id, .. } in events.read() {
+        println!("Attack received from client {:?}", client_id);
         let mut attacker_info: Option<(Entity, Transform)> = None;
 
         // Get NetworkId from the client entity
@@ -535,7 +536,7 @@ fn handle_player_attack(
             // --- Auto-aim Logic ---
             // Find closest target to rotate towards
             let mut closest_target_pos: Option<Vec3> = None;
-            let mut closest_dist_sq = (ATTACK_RANGE * 1.5).powi(2); // slightly larger range for aim assist
+            let mut closest_dist_sq = 100.0; // 10 units range for aim assist (matches client)
 
             // Check zombies
             for (_, zombie_transform, _, _) in &zombie_query {
@@ -563,6 +564,7 @@ fn handle_player_attack(
 
             // If target found, rotate attacker
             if let Some(target_pos) = closest_target_pos {
+                println!("Auto-aim found target at {:?}", target_pos);
                 let diff = target_pos - attacker_transform.translation;
                 let horizontal_diff = Vec3::new(diff.x, 0.0, diff.z);
 
@@ -574,8 +576,11 @@ fn handle_player_attack(
                     if let Ok((_, _, mut t, _, _, _)) = player_query.get_mut(attacker_entity) {
                         t.rotation = target_rotation;
                         attacker_transform_final.rotation = target_rotation;
+                        println!("Rotated player toward target");
                     }
                 }
+            } else {
+                println!("No auto-aim target found within range");
             }
             // ----------------------
 
@@ -594,28 +599,24 @@ fn handle_player_attack(
                 let distance = attacker_pos.distance(zombie_transform.translation);
 
                 if distance < ATTACK_RANGE {
-                    // Calculate direction to target
+                    // Calculate horizontal direction to target (Y=0 to match auto-aim)
                     let diff = zombie_transform.translation - attacker_pos;
+                    let horizontal_diff = Vec3::new(diff.x, 0.0, diff.z);
 
-                    // If they are too close, just hit. Otherwise check angle and line of sight.
-                    if let Ok(to_target) = Dir3::new(diff) {
-                        // Check angle
-                        if attacker_forward.dot(*to_target) < ATTACK_ANGLE {
+                    // Only check angle if there's meaningful horizontal distance
+                    if horizontal_diff.length() > 0.1 {
+                        let to_target = horizontal_diff.normalize();
+                        let horizontal_forward =
+                            Vec3::new(attacker_forward.x, 0.0, attacker_forward.z).normalize();
+
+                        // Check angle using horizontal directions only
+                        if horizontal_forward.dot(to_target) < ATTACK_ANGLE {
                             continue;
-                        }
-
-                        // Check line of sight (raycast)
-                        let filter = SpatialQueryFilter::from_excluded_entities([attacker_entity]);
-                        if let Some(hit) =
-                            spatial_query.cast_ray(attacker_pos, to_target, distance, true, &filter)
-                        {
-                            if hit.entity != zombie_entity {
-                                continue;
-                            }
                         }
                     }
 
-                    // Hit confirmed
+                    // Hit confirmed - removed strict raycast check for melee combat
+                    // Angle and distance checks are sufficient for close-range attacks
                     zombie_health.current = (zombie_health.current - ZOMBIE_DAMAGE).max(0.0);
                     zombie_damage_flash.timer = 0.5; // Trigger hit animation
 

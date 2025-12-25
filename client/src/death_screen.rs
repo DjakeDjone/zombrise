@@ -21,15 +21,18 @@ pub fn detect_player_death(
         return;
     }
 
+    // Once dead, stay dead until explicitly reset (by returning to menu)
+    if player_died.0 {
+        return;
+    }
+
     let our_player = player_query
         .iter()
         .find(|(_, owner)| owner.0 == client_id.0);
 
     if let Some((health, _)) = our_player {
-        if health.current <= 0.0 && !player_died.0 {
+        if health.current <= 0.0 {
             player_died.0 = true;
-        } else if health.current > 0.0 && player_died.0 {
-            player_died.0 = false;
         }
     }
     // If we haven't found our player yet, don't assume we're dead - we might still be loading
