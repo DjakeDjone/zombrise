@@ -413,13 +413,24 @@ fn zombie_movement(
                     behavior.timer =
                         Timer::from_seconds(rand::random::<f32>() * 2.0 + 2.0, TimerMode::Once);
 
-                    // Pick a random direction
-                    behavior.wander_direction = Vec3::new(
-                        rand::random::<f32>() * 2.0 - 1.0,
-                        0.0,
-                        rand::random::<f32>() * 2.0 - 1.0,
-                    )
-                    .normalize_or_zero();
+                    // Pick a random direction but stay in bounds
+                    let mut rng = rand::thread_rng();
+                    let mut wander_dir =
+                        Vec3::new(rng.gen_range(-1.0..1.0), 0.0, rng.gen_range(-1.0..1.0))
+                            .normalize_or_zero();
+
+                    // Boundary check (map is roughly 56x56, so +/- 28 bounds, stay safe within 25)
+                    let future_pos = zombie_transform.translation + wander_dir * 5.0; // Look ahead
+                    if future_pos.x.abs() > 25.0 || future_pos.z.abs() > 25.0 {
+                        // Steer back to center
+                        wander_dir = -zombie_transform.translation.normalize_or_zero();
+                        // Add some randomness so they don't all walk in a straight line to 0,0
+                        wander_dir.x += rng.gen_range(-0.5..0.5);
+                        wander_dir.z += rng.gen_range(-0.5..0.5);
+                        wander_dir = wander_dir.normalize_or_zero();
+                    }
+
+                    behavior.wander_direction = wander_dir;
                 }
             }
             ZombieAiState::Wandering => {

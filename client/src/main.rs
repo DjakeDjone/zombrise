@@ -158,7 +158,7 @@ fn main() {
                 (
                     handle_client_auto_aim,
                     handle_camera_rotation,
-                    handle_input,
+                    handle_input.before(trigger_player_attack_animation),
                     camera_follow,
                 )
                     .chain(),
