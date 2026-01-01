@@ -14,6 +14,19 @@ pub struct ZombieDamageFlash {
     pub timer: f32,
 }
 
+/// Component to track zombie death sequence.
+/// When a zombie dies, it first falls to the ground, then burns before disappearing.
+#[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default)]
+#[reflect(Component)]
+pub struct ZombieDying {
+    /// Total time since death started
+    pub timer: f32,
+    /// Duration of falling phase (playing death animation)
+    pub fall_duration: f32,
+    /// Duration of burning phase
+    pub burn_duration: f32,
+}
+
 pub const ZOMBIE_SPEED: f32 = 2.0;
 pub const ZOMBIE_ANIMATION_SPEED_MULTIPLIER: f32 = 1.0;
 
@@ -47,8 +60,8 @@ pub struct ZombieRoot(pub Entity);
 #[derive(Component)]
 pub struct ZombieLink(pub Entity);
 
-#[cfg(feature = "client")]
-#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Component, Clone, Copy, PartialEq, Eq, Debug, Reflect, Serialize, Deserialize)]
+#[reflect(Component)]
 pub enum ZombieAnimationState {
     Idle,
     Walking,
@@ -56,6 +69,12 @@ pub enum ZombieAnimationState {
     Attacking,
     Dying,
     Hit,
+}
+
+impl Default for ZombieAnimationState {
+    fn default() -> Self {
+        Self::Idle
+    }
 }
 
 #[cfg(feature = "client")]
@@ -77,13 +96,6 @@ impl AnimationEvent for ZombieAnimationEvent {}
 #[derive(Resource, Default)]
 pub struct ZombieAnimationEventsState {
     pub events_added: bool,
-}
-
-#[cfg(feature = "client")]
-impl Default for ZombieAnimationState {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 #[cfg(feature = "client")]
@@ -272,32 +284,21 @@ pub fn setup_zombie_animation(
 #[cfg(feature = "client")]
 pub fn update_zombie_animation_state(
     mut commands: Commands,
-    time: Res<Time>,
-    mut anim_query: Query<(
-        Entity,
-        &mut ZombieAnimationState,
-        &ZombieRoot,
-        Option<&ZombiePrevPosition>,
-        &mut ZombieUpdateTimer,
-        &GlobalTransform,
-    )>,
-    zombie_query: Query<Option<&ZombieDamageFlash>, With<Zombie>>,
-    player_query: Query<&GlobalTransform, With<crate::players::player::Player>>,
+    mut anim_query: Query<
+        (
+            Entity,
+            &mut ZombieAnimationState,
+            &ZombieRoot,
+            Option<&ZombiePrevPosition>,
+            &GlobalTransform,
+        ),
+        Without<Zombie>,
+    >,
+    zombie_query: Query<(Option<&ZombieDamageFlash>, Option<&ZombieAnimationState>), With<Zombie>>,
 ) {
-    const CHASE_RANGE: f32 = 10.0;
-    const ATTACK_RANGE: f32 = 1.5;
-    const MOVEMENT_THRESHOLD: f32 = 0.01; // Min velocity
-    const UPDATE_INTERVAL: f32 = 0.2; // Check every 200ms
-
-    for (entity, mut anim_state, zombie_root, prev_pos, mut timer, global_transform) in
-        &mut anim_query
-    {
-        // Always update previous position for velocity calculation every frame?
-        // Actually, to correctly calculate velocity, we need per-frame updates or time-delta awareness.
-        // Let's keep position update per frame but AI decision throttled.
-
-        // Get damage flash from root zombie (logic entity)
-        let Ok(damage_flash) = zombie_query.get(zombie_root.0) else {
+    for (entity, mut anim_state, zombie_root, _prev_pos, global_transform) in &mut anim_query {
+        // Get damage flash and replicated animation state from root zombie (logic entity)
+        let Ok((damage_flash, server_anim_state)) = zombie_query.get(zombie_root.0) else {
             continue;
         };
 
@@ -307,51 +308,29 @@ pub fn update_zombie_animation_state(
         // Check if zombie is being hit (damage flash is active)
         let is_hit = damage_flash.map(|df| df.timer > 0.0).unwrap_or(false);
 
-        // Compute velocity
-        let is_moving = if let Some(prev) = prev_pos {
-            let velocity = (zombie_pos - prev.0).length();
-            velocity > MOVEMENT_THRESHOLD
-        } else {
-            false
-        };
-
         // Update prev pos
         commands
             .entity(entity)
             .insert(ZombiePrevPosition(zombie_pos));
 
-        // Throttle expensive distance checks
-        timer.0 += time.delta_secs();
-        if timer.0 < UPDATE_INTERVAL && !is_hit {
-            // If hit, react immediately
+        // Don't override if zombie is dying - the death animation should continue
+        if *anim_state == ZombieAnimationState::Dying {
             continue;
         }
-        timer.0 = 0.0;
 
-        // Find nearest player
-        let mut nearest_distance = f32::MAX;
-        for player_transform in &player_query {
-            let distance = zombie_pos.distance(player_transform.translation());
-            if distance < nearest_distance {
-                nearest_distance = distance;
+        // Priority 1: Hit state (local override based on damage flash)
+        if is_hit {
+            if *anim_state != ZombieAnimationState::Hit {
+                *anim_state = ZombieAnimationState::Hit;
             }
-        }
-
-        // Determine state - Hit takes priority
-        let new_state = if is_hit {
-            ZombieAnimationState::Hit
-        } else if nearest_distance < ATTACK_RANGE {
-            ZombieAnimationState::Attacking
-        } else if nearest_distance < CHASE_RANGE {
-            ZombieAnimationState::Running // Chasing=running
-        } else if is_moving {
-            ZombieAnimationState::Walking // Wandering=walking
-        } else {
-            ZombieAnimationState::Idle // Stand=idle
-        };
-
-        if *anim_state != new_state {
-            *anim_state = new_state;
+        } else if let Some(server_state) = server_anim_state {
+            // Priority 2: Sync with server's replicated animation state
+            // This is the key fix: the server replicates ZombieAnimationState to the root entity,
+            // but control_zombie_animation expects it on the AnimationPlayer entity.
+            // We sync the state here so the animation system can see the changes.
+            if *anim_state != *server_state {
+                *anim_state = *server_state;
+            }
         }
     }
 }

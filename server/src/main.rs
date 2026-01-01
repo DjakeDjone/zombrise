@@ -19,7 +19,7 @@ use std::{
     time::SystemTime,
 };
 use zombrise_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker, ZombieDamageFlash};
-use zombrise_shared::zombie::zombie::{Zombie, ZOMBIE_SPEED};
+use zombrise_shared::zombie::zombie::{Zombie, ZombieAnimationState, ZombieDying, ZOMBIE_SPEED};
 use zombrise_shared::{
     entity2::Health,
     players::player::{DamageFlash, Player, PlayerAttack, PlayerAttackCooldown, PlayerOwner},
@@ -34,6 +34,7 @@ enum ZombieAiState {
     Idle,
     Wandering,
     Chasing,
+    Attacking,
 }
 
 #[derive(Component)]
@@ -84,6 +85,7 @@ fn main() {
                 update_damage_flash,
                 update_zombie_damage_flash,
                 update_attack_cooldown,
+                update_dying_zombies,
                 remove_dead_players,
                 remove_fallen_entities,
                 passive_health_regeneration,
@@ -337,6 +339,7 @@ fn spawn_zombies(
             LockedAxes::new().lock_rotation_x().lock_rotation_z(),
             LinearDamping(0.5),
             AngularDamping(20.0),
+            ZombieAnimationState::default(),
             ZombieBehavior {
                 state: ZombieAiState::Idle,
                 timer: Timer::from_seconds(rng.random_range(1.0..3.0), TimerMode::Once),
@@ -349,16 +352,22 @@ fn spawn_zombies(
 
 fn zombie_movement(
     mut zombie_query: Query<
-        (&mut LinearVelocity, &mut Transform, &mut ZombieBehavior),
-        (With<Zombie>, Without<Player>),
+        (
+            &mut LinearVelocity,
+            &mut Transform,
+            &mut ZombieBehavior,
+            &mut ZombieAnimationState,
+        ),
+        (With<Zombie>, Without<Player>, Without<ZombieDying>),
     >,
     player_query: Query<&Transform, (With<Player>, Without<Zombie>)>,
     time: Res<Time>,
 ) {
     let speed = ZOMBIE_SPEED;
     let chase_range = 10.0;
+    const ATTACK_RANGE: f32 = 1.3;
 
-    for (mut lin_vel, mut zombie_transform, mut behavior) in &mut zombie_query {
+    for (mut lin_vel, mut zombie_transform, mut behavior, mut anim_state) in &mut zombie_query {
         let mut nearest_player_pos: Option<Vec3> = None;
         let mut min_dist = f32::MAX;
 
@@ -372,17 +381,18 @@ fn zombie_movement(
             }
         }
 
-        // Check if we should chase
+        // Check if we should chase or attack
         if let Some(player_pos) = nearest_player_pos {
-            if min_dist < chase_range {
-                behavior.state = ZombieAiState::Chasing;
+            // Priority 1: Attacking (stop moving)
+            if min_dist < ATTACK_RANGE {
+                behavior.state = ZombieAiState::Attacking;
 
-                // Chase logic
-                let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
-                lin_vel.x = direction.x * speed;
-                lin_vel.z = direction.z * speed;
+                // Stop moving
+                lin_vel.x = 0.0;
+                lin_vel.z = 0.0;
 
                 // Rotate to face player
+                let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
                 let horizontal_direction = Vec3::new(direction.x, 0.0, direction.z);
                 if horizontal_direction.length() > 0.01 {
                     let target_rotation =
@@ -390,11 +400,45 @@ fn zombie_movement(
                     zombie_transform.rotation = target_rotation;
                 }
                 continue;
+            } else if min_dist < chase_range {
+                // Priority 2: Chasing (moving)
+                // Hysteresis: only go back to chasing if slightly outside attack range
+                if behavior.state != ZombieAiState::Attacking || min_dist > ATTACK_RANGE + 0.2 {
+                    behavior.state = ZombieAiState::Chasing;
+
+                    // Chase logic
+                    let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
+                    lin_vel.x = direction.x * speed;
+                    lin_vel.z = direction.z * speed;
+
+                    // Rotate to face player
+                    let horizontal_direction = Vec3::new(direction.x, 0.0, direction.z);
+                    if horizontal_direction.length() > 0.01 {
+                        let target_rotation =
+                            Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
+                        zombie_transform.rotation = target_rotation;
+                    }
+                    continue;
+                } else {
+                    // Stay attacking if in hysteresis zone
+                    // Stop moving
+                    lin_vel.x = 0.0;
+                    lin_vel.z = 0.0;
+                    // Rotate to face player
+                    let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
+                    let horizontal_direction = Vec3::new(direction.x, 0.0, direction.z);
+                    if horizontal_direction.length() > 0.01 {
+                        let target_rotation =
+                            Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
+                        zombie_transform.rotation = target_rotation;
+                    }
+                    continue;
+                }
             }
         }
 
         // If we were chasing but lost the player, go back to idle
-        if behavior.state == ZombieAiState::Chasing {
+        if behavior.state == ZombieAiState::Chasing || behavior.state == ZombieAiState::Attacking {
             behavior.state = ZombieAiState::Idle;
             behavior.timer = Timer::from_seconds(1.0, TimerMode::Once);
         }
@@ -414,10 +458,13 @@ fn zombie_movement(
                         Timer::from_seconds(rand::random::<f32>() * 2.0 + 2.0, TimerMode::Once);
 
                     // Pick a random direction but stay in bounds
-                    let mut rng = rand::thread_rng();
-                    let mut wander_dir =
-                        Vec3::new(rng.gen_range(-1.0..1.0), 0.0, rng.gen_range(-1.0..1.0))
-                            .normalize_or_zero();
+                    let mut rng = rand::rng();
+                    let mut wander_dir = Vec3::new(
+                        rng.random_range(-1.0..1.0),
+                        0.0,
+                        rng.random_range(-1.0..1.0),
+                    )
+                    .normalize_or_zero();
 
                     // Boundary check (map is roughly 56x56, so +/- 28 bounds, stay safe within 25)
                     let future_pos = zombie_transform.translation + wander_dir * 5.0; // Look ahead
@@ -425,8 +472,8 @@ fn zombie_movement(
                         // Steer back to center
                         wander_dir = -zombie_transform.translation.normalize_or_zero();
                         // Add some randomness so they don't all walk in a straight line to 0,0
-                        wander_dir.x += rng.gen_range(-0.5..0.5);
-                        wander_dir.z += rng.gen_range(-0.5..0.5);
+                        wander_dir.x += rng.random_range(-0.5..0.5);
+                        wander_dir.z += rng.random_range(-0.5..0.5);
                         wander_dir = wander_dir.normalize_or_zero();
                     }
 
@@ -456,13 +503,25 @@ fn zombie_movement(
                         Timer::from_seconds(rand::random::<f32>() * 2.0 + 1.0, TimerMode::Once);
                 }
             }
-            _ => {} // Chasing is handled above
+            _ => {} // Chasing/Attacking is handled above
+        }
+
+        // Sync visual state
+        let new_anim_state = match behavior.state {
+            ZombieAiState::Idle => ZombieAnimationState::Idle,
+            ZombieAiState::Wandering => ZombieAnimationState::Walking,
+            ZombieAiState::Chasing => ZombieAnimationState::Walking,
+            ZombieAiState::Attacking => ZombieAnimationState::Attacking,
+        };
+
+        if *anim_state != new_anim_state {
+            *anim_state = new_anim_state;
         }
     }
 }
 
 fn zombie_collision_damage(
-    zombie_query: Query<&Transform, With<Zombie>>,
+    zombie_query: Query<&Transform, (With<Zombie>, Without<ZombieDying>)>,
     mut player_query: Query<(&Transform, &mut Health, &mut DamageFlash), With<Player>>,
     time: Res<Time>,
 ) {
@@ -632,7 +691,12 @@ fn handle_player_attack(
                     zombie_damage_flash.timer = 0.5; // Trigger hit animation
 
                     if zombie_health.current == 0.0 {
-                        commands.entity(zombie_entity).despawn();
+                        // Start death sequence instead of immediate despawn
+                        commands.entity(zombie_entity).insert(ZombieDying {
+                            timer: 0.0,
+                            fall_duration: 2.0,  // 2 seconds for death animation
+                            burn_duration: 3.0,  // 3 seconds of burning
+                        });
                         // Reward player with max health increase
                         if let Ok((_, _, _, mut attacker_health, _, _)) =
                             player_query.get_mut(attacker_entity)
@@ -776,6 +840,38 @@ fn update_attack_cooldown(mut query: Query<&mut PlayerAttackCooldown>, time: Res
             if cooldown.0 < 0.0 {
                 cooldown.0 = 0.0;
             }
+        }
+    }
+}
+
+/// Updates dying zombies - progresses the death timer and despawns when complete.
+/// Also sets the animation state to Dying and disables AI behavior.
+fn update_dying_zombies(
+    mut commands: Commands,
+    mut dying_query: Query<
+        (Entity, &mut ZombieDying, &mut ZombieAnimationState, &mut LinearVelocity),
+        With<Zombie>,
+    >,
+    time: Res<Time>,
+) {
+    for (entity, mut dying, mut anim_state, mut velocity) in &mut dying_query {
+        // Ensure the dying animation is playing
+        if *anim_state != ZombieAnimationState::Dying {
+            *anim_state = ZombieAnimationState::Dying;
+        }
+
+        // Stop horizontal movement - let gravity handle the fall
+        velocity.x = 0.0;
+        velocity.z = 0.0;
+
+        // Progress the death timer
+        dying.timer += time.delta_secs();
+
+        // Check if death sequence is complete (fall + burn)
+        let total_duration = dying.fall_duration + dying.burn_duration;
+        if dying.timer >= total_duration {
+            commands.entity(entity).despawn();
+            println!("Dying zombie despawned after death sequence");
         }
     }
 }
