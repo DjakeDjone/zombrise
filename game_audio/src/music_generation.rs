@@ -72,8 +72,6 @@ impl From<Note> for NoteType {
 pub enum ScaleType {
     Major,
     Minor,
-    Phrygian,
-    HarmonicMinor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -98,58 +96,11 @@ impl Scale {
     }
 
     // returns the note and the suggested length
-    pub fn get_random_note_with_context(
-        &self,
-        octaves: &(u8, u8),
-        root_note: &Note,
-        context: &Vec<TimedNote>,
-    ) -> (Note, f32) {
-        let mut filtered_notes: Vec<NoteType> = self
-            .notes
-            .iter()
-            .cloned()
-            .filter(|note_type| {
-                !context.iter().any(|note| {
-                    if let Some(n) = note.note {
-                        n.note_type == *note_type && n.octave == root_note.octave
-                    } else {
-                        false
-                    }
-                })
-            })
-            .collect();
-
-        if filtered_notes.is_empty() {
-            filtered_notes = self.notes.clone();
-        }
-
-        let scale_size = filtered_notes.len() as u8;
-        let random_note = rand::random::<u8>() % scale_size;
-        let random_octave = rand::random::<u8>() % (octaves.1 - octaves.0 + 1) + octaves.0;
-        let note = Note::new(filtered_notes[random_note as usize], random_octave);
-        let length = rand::random::<f32>() * 2.0 + 1.0;
-        (note, length)
-    }
-
-    pub fn get_random_note_with_context_and_break_chance(
-        &self,
-        octaves: &(u8, u8),
-        root_note: &Note,
-        context: &Vec<TimedNote>,
-        break_chance: f32,
-    ) -> Option<(Note, f32)> {
-        if rand::random::<f32>() < break_chance {
-            return None;
-        }
-        Some(self.get_random_note_with_context(octaves, root_note, context))
-    }
 
     pub fn from_type(root: Note, scale_type: ScaleType) -> Self {
         match scale_type {
             ScaleType::Major => Self::major(root),
             ScaleType::Minor => Self::minor(root),
-            ScaleType::Phrygian => Self::phrygian(root),
-            ScaleType::HarmonicMinor => Self::harmonic_minor(root),
         }
     }
 
@@ -311,56 +262,6 @@ impl Chord {
     }
 
     // New chord progression methods moved from Scale
-    /// Returns the next major chord based on the current chord's root.
-    /// Progression: C -> F -> G -> C (with octave handling).
-    pub fn get_next_major_chord(&self) -> Self {
-        match self.root.note_type {
-            NoteType::C => {
-                Chord::from_scale(&Scale::major(Note::new(NoteType::F, self.root.octave)))
-            }
-            NoteType::F => {
-                Chord::from_scale(&Scale::major(Note::new(NoteType::G, self.root.octave)))
-            }
-            NoteType::G => {
-                Chord::from_scale(&Scale::major(Note::new(NoteType::C, self.root.octave)))
-            }
-            _ => self.clone(),
-        }
-    }
-
-    /// Returns the next minor chord derived from a major chord progression.
-    /// Progression: C -> A, G -> E, D -> B.
-    pub fn get_next_minor_chord_from_major(&self) -> Self {
-        match self.root.note_type {
-            NoteType::C => {
-                Chord::from_scale(&Scale::minor(Note::new(NoteType::A, self.root.octave)))
-            }
-            NoteType::G => {
-                Chord::from_scale(&Scale::minor(Note::new(NoteType::E, self.root.octave)))
-            }
-            NoteType::D => {
-                Chord::from_scale(&Scale::minor(Note::new(NoteType::B, self.root.octave)))
-            }
-            _ => self.clone(),
-        }
-    }
-
-    /// Returns the next minor chord derived from a minor chord progression.
-    /// Progression: C -> E, G -> B, D -> G (next octave).
-    pub fn get_next_minor_chord_from_minor(&self) -> Self {
-        match self.root.note_type {
-            NoteType::C => {
-                Chord::from_scale(&Scale::minor(Note::new(NoteType::E, self.root.octave)))
-            }
-            NoteType::G => {
-                Chord::from_scale(&Scale::minor(Note::new(NoteType::B, self.root.octave)))
-            }
-            NoteType::D => {
-                Chord::from_scale(&Scale::minor(Note::new(NoteType::G, self.root.octave + 1)))
-            }
-            _ => self.clone(),
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -416,8 +317,6 @@ impl ScaleMotif {
 pub struct Song {
     pub lines: Vec<Line>,
     pub tempo: f32,
-    #[allow(dead_code)]
-    pub loop_track: bool,
 }
 
 impl Song {
@@ -425,7 +324,6 @@ impl Song {
         Song {
             lines: Vec::new(),
             tempo: 120.0,
-            loop_track: false,
         }
     }
 

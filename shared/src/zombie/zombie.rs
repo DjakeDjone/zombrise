@@ -5,18 +5,18 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "client")]
 use std::time::Duration;
 
-#[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default)]
+#[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default, PartialEq)]
 #[reflect(Component)]
 pub struct Zombie;
 
-#[derive(Component, Serialize, Deserialize, Reflect, Default)]
+#[derive(Component, Serialize, Deserialize, Reflect, Default, PartialEq, Clone)]
 pub struct ZombieDamageFlash {
     pub timer: f32,
 }
 
 /// Component to track zombie death sequence.
 /// When a zombie dies, it first falls to the ground, then burns before disappearing.
-#[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default)]
+#[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default, PartialEq)]
 #[reflect(Component)]
 pub struct ZombieDying {
     /// Total time since death started
@@ -27,8 +27,8 @@ pub struct ZombieDying {
     pub burn_duration: f32,
 }
 
-pub const ZOMBIE_SPEED: f32 = 2.0;
-pub const ZOMBIE_ANIMATION_SPEED_MULTIPLIER: f32 = 1.0;
+pub const ZOMBIE_SPEED: f32 = 0.8;
+pub const ZOMBIE_ANIMATION_SPEED_MULTIPLIER: f32 = 0.5;
 
 #[cfg(feature = "client")]
 #[derive(Component, Clone, Debug)]
@@ -78,7 +78,7 @@ impl Default for ZombieAnimationState {
 }
 
 #[cfg(feature = "client")]
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Reflect, Serialize, Deserialize, Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Reflect, Serialize, Deserialize)]
 pub enum ZombieAnimationEvent {
     Footstep,
     AttackHit,
@@ -172,10 +172,17 @@ pub struct ZombieAnimationGraph {
     pub animations: ZombieAnimations,
 }
 
+#[derive(Component)]
+pub struct NotAZombie;
+
 #[cfg(feature = "client")]
+#[allow(clippy::too_many_arguments)]
 pub fn setup_zombie_animation(
     mut commands: Commands,
-    mut animation_players: Query<(Entity, &mut AnimationPlayer), Added<AnimationPlayer>>,
+    mut animation_players: Query<
+        (Entity, &mut AnimationPlayer),
+        (Without<ZombieAnimations>, Without<NotAZombie>),
+    >,
     asset_server: Res<AssetServer>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
     parent_query: Query<&ChildOf>,
@@ -243,22 +250,37 @@ pub fn setup_zombie_animation(
         // Find root zombie
         let mut zombie_root = None;
         let mut current = entity;
+        let mut depth = 0;
+        let mut found_link = false;
+
         while let Ok(child_of) = parent_query.get(current) {
             current = child_of.parent();
+            depth += 1;
             if zombie_query.contains(current) {
                 zombie_root = Some(current);
                 break;
             }
             if let Ok(link) = zombie_link_query.get(current) {
+                found_link = true;
                 if zombie_query.contains(link.0) {
                     zombie_root = Some(link.0);
                     break;
                 }
             }
+            // Limit depth to avoid infinite loops or overly expensive searching
+            if depth > 10 {
+                break;
+            }
         }
 
-        // Skip if not zombie
+        // If we found a ZombieLink but missed the component, it might be a timing issue (Zombie entity not Replicated yet?).
+        // If we didn't even find a ZombieLink, it's probably not a zombie (e.g. Player).
         let Some(zombie_entity) = zombie_root else {
+            if !found_link {
+                // No link, no zombie. Probably the Player. Ignore it forever.
+                commands.entity(entity).insert(NotAZombie);
+            }
+            // If found_link is true, we implicitly allow retry by NOT inserting NotAZombie, valid for timing issues
             continue;
         };
 
@@ -442,10 +464,13 @@ pub fn add_zombie_animation_events(
     }
 }
 
-#[cfg(feature = "client")]
-pub fn handle_zombie_animation_events(mut animation_events: MessageReader<ZombieAnimationEvent>) {
-    // Process events but don't print
-    for _event in animation_events.read() {
-        // Handle specific events if needed regarding logic, but remove spammy logs
-    }
-}
+// Note: Animation events are handled through the animation system directly,
+// not via EventReader. This handler was causing a Message trait issue with Bevy 0.17.
+// #[cfg(feature = "client")]
+// pub fn handle_zombie_animation_events(
+//     mut animation_events: bevy::prelude::EventReader<ZombieAnimationEvent>,
+// ) {
+//     for _event in animation_events.read() {
+//         // Handle specific events if needed
+//     }
+// }

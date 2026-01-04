@@ -19,16 +19,13 @@ impl Plugin for SuduxuPlugin {
 }
 
 fn startup_suduxu_system(mut commands: Commands) {
-    println!("Suduxu: Initializing...");
-
     match Suduxu::new() {
         Ok(suduxu) => {
-            println!("Suduxu: Library loaded successfully.");
             suduxu.start();
             commands.insert_resource(SuduxuResource(Arc::new(suduxu)));
         }
         Err(e) => {
-            eprintln!("Suduxu: Failed to load library: {}", e);
+            bevy::log::warn!("Suduxu: Failed to load library: {}", e);
         }
     }
 }
@@ -77,7 +74,6 @@ fn update_suduxu_system(
 
     for &btn in all_buttons.iter() {
         if suduxu.0.get_button(client_id, btn, ButtonInputState::Down) {
-            println!("Suduxu Button Pressed: {:?}", btn);
             input.press(btn);
         } else {
             input.release(btn);

@@ -34,8 +34,6 @@ pub struct LoadingProgress {
 
 /// Starts asset loading
 pub fn start_loading_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
-    println!("=== START_LOADING_ASSETS ===");
-
     // Load assets
     let config = PlayerAnimationConfig::default();
     let zombie_model: Handle<Gltf> = asset_server.load("zombie.glb");
@@ -57,14 +55,10 @@ pub fn start_loading_assets(mut commands: Commands, asset_server: Res<AssetServe
         assets_loaded: 0,
         total_assets: 5,
     });
-
-    println!("=== ASSETS QUEUED FOR LOADING ===");
 }
 
 /// Displays loading screen
 pub fn show_loading_screen(mut commands: Commands) {
-    println!("=== SHOW_LOADING_SCREEN ===");
-
     commands
         .spawn((
             Node {
@@ -75,7 +69,7 @@ pub fn show_loading_screen(mut commands: Commands) {
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
-            BackgroundColor(Color::srgb(0.08, 0.08, 0.12).into()),
+            BackgroundColor(Color::srgb(0.08, 0.08, 0.12)),
             LoadingScreenMarker,
         ))
         .with_children(|parent| {
@@ -100,7 +94,7 @@ pub fn show_loading_screen(mut commands: Commands) {
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
-                    BackgroundColor(Color::srgb(0.15, 0.15, 0.2).into()),
+                    BackgroundColor(Color::srgb(0.15, 0.15, 0.2)),
                     BorderColor::all(Color::srgb(0.4, 0.4, 0.5)),
                 ))
                 .with_children(|bar_parent| {
@@ -110,7 +104,7 @@ pub fn show_loading_screen(mut commands: Commands) {
                             height: Val::Percent(100.0),
                             ..default()
                         },
-                        BackgroundColor(Color::srgb(0.3, 0.7, 0.4).into()),
+                        BackgroundColor(Color::srgb(0.3, 0.7, 0.4)),
                         LoadingProgressBar,
                     ));
                 });
@@ -129,8 +123,6 @@ pub fn show_loading_screen(mut commands: Commands) {
                 LoadingStatusText,
             ));
         });
-
-    println!("=== SHOW_LOADING_SCREEN COMPLETE ===");
 }
 
 /// Updates loading progress
@@ -193,7 +185,6 @@ pub fn check_loading_progress(
     }
 
     if progress.assets_loaded >= progress.total_assets {
-        println!("=== ALL ASSETS LOADED, TRANSITIONING TO PLAYING ===");
         game_assets.loading_complete = true;
         next_state.set(AppState::Playing);
     }

@@ -1,6 +1,6 @@
 use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor};
 use bevy::prelude::*;
-use bevy_mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
+use bevy_mesh::{Indices, VertexAttributeValues};
 
 #[derive(Debug, Clone, Copy)]
 pub struct SnowLandscapeConfig {
@@ -49,7 +49,6 @@ pub struct MapAssets {
     pub sky_mesh: Handle<Mesh>,
     pub sky_material: Handle<StandardMaterial>,
     pub config: SnowLandscapeConfig,
-    pub sky_config: SkyConfig,
 }
 
 #[derive(Component)]
@@ -239,7 +238,6 @@ pub fn create_map_assets(
         sky_mesh,
         sky_material,
         config,
-        sky_config,
     }
 }
 

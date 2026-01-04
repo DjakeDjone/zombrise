@@ -5,6 +5,11 @@ edition = "2021"
 description = "A zombie survival game built with Bevy engine."
 
 [dependencies]
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
+getrandom = { version = "0.2", features = ["js"] }
+
+
 zombrise_shared = { path = "../shared", features = ["client"] }
 game_audio = { path = "../game_audio" }
 bevy = { version = "0.17", default-features = false, features = [
@@ -26,21 +31,35 @@ bevy = { version = "0.17", default-features = false, features = [
     "jpeg",
     "tonemapping_luts",
     "default_font",
-    "x11",
-    "wayland",
+    # "x11", 
+    # "wayland", 
     "bevy_state",
     "zstd_rust",
+    "webgl2",
 ] }
 bevy_core_pipeline = "0.17"
-bevy_replicon = "0.36"
-bevy_replicon_renet2 = "0.11"
-renet2_netcode = "0.11"
+lightyear = { version = "0.25", features = [
+    "interpolation",
+    "prediction",
+    "replication",
+    "input_native",
+    "udp",
+    "netcode",
+] }
+lightyear_udp = "0.25"
+# bevy_replicon = "0.36"
+# bevy_replicon_renet2 = "0.11"
+# renet2_netcode = "0.11"
 bevy_simple_text_input = "0.12"
-arboard = "3.6"
 avian3d = "0.4"
 bevy-inspector-egui = "0.35.0"
 bevy_mesh = "0.17.3"
+bevy_input = "0.17"
+leafwing-input-manager = "0.16"
 fastrand = "2.3"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+arboard = "3.6"
 
 [package.metadata.deb]
 maintainer = "DjakeDjone"

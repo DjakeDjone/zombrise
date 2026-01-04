@@ -1,5 +1,6 @@
 #[cfg(feature = "client")]
 use bevy::animation::AnimationPlayer;
+#[cfg(feature = "client")]
 use bevy::prelude::*;
 #[cfg(feature = "client")]
 use std::time::Duration;
@@ -212,7 +213,9 @@ pub fn update_player_animation_state(
     >,
     player_attacking_query: Query<&PlayerAttacking, With<crate::players::player::Player>>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    suduxu_input: Option<Res<ButtonInput<crate::suduxu::SuduxuButton>>>,
+    #[cfg(not(target_arch = "wasm32"))] suduxu_input: Option<
+        Res<ButtonInput<crate::suduxu::SuduxuButton>>,
+    >,
     my_client_id: Option<Res<crate::players::player::MyClientId>>,
 ) {
     // Check local movement input
@@ -223,13 +226,19 @@ pub fn update_player_animation_state(
         || keyboard_input.pressed(KeyCode::ArrowUp)
         || keyboard_input.pressed(KeyCode::ArrowDown)
         || keyboard_input.pressed(KeyCode::ArrowLeft)
-        || keyboard_input.pressed(KeyCode::ArrowRight)
-        || suduxu_input.as_ref().map_or(false, |s| {
-            s.pressed(crate::suduxu::SuduxuButton::Up)
-                || s.pressed(crate::suduxu::SuduxuButton::Down)
-                || s.pressed(crate::suduxu::SuduxuButton::Left)
-                || s.pressed(crate::suduxu::SuduxuButton::Right)
-        });
+        || keyboard_input.pressed(KeyCode::ArrowRight);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let suduxu_moving = suduxu_input.as_ref().is_some_and(|s| {
+        s.pressed(crate::suduxu::SuduxuButton::Up)
+            || s.pressed(crate::suduxu::SuduxuButton::Down)
+            || s.pressed(crate::suduxu::SuduxuButton::Left)
+            || s.pressed(crate::suduxu::SuduxuButton::Right)
+    });
+    #[cfg(target_arch = "wasm32")]
+    let suduxu_moving = false;
+
+    let is_moving_input = is_moving_input || suduxu_moving;
 
     let local_client_id = my_client_id.map(|id| id.0).unwrap_or(0);
 
@@ -338,8 +347,6 @@ pub fn control_player_animation(
             continue;
         }
 
-        println!("Playing player animation: {:?}", state);
-
         // Smooth blend
         match *state {
             PlayerAnimationState::Idle => {
@@ -407,11 +414,16 @@ pub fn update_player_attack_timer(mut query: Query<&mut PlayerAttacking>, time: 
 pub fn trigger_player_attack_animation(
     mut query: Query<(&mut PlayerAttacking, &crate::players::player::PlayerOwner)>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    suduxu_input: Option<Res<ButtonInput<crate::suduxu::SuduxuButton>>>,
+    #[cfg(not(target_arch = "wasm32"))] suduxu_input: Option<
+        Res<ButtonInput<crate::suduxu::SuduxuButton>>,
+    >,
     my_client_id: Res<crate::players::player::MyClientId>,
 ) {
+    #[cfg(not(target_arch = "wasm32"))]
     let suduxu_clicked =
-        suduxu_input.map_or(false, |s| s.just_pressed(crate::suduxu::SuduxuButton::A));
+        suduxu_input.is_some_and(|s| s.just_pressed(crate::suduxu::SuduxuButton::A));
+    #[cfg(target_arch = "wasm32")]
+    let suduxu_clicked = false;
 
     if keyboard_input.just_pressed(KeyCode::Space) || suduxu_clicked {
         for (mut attacking, owner) in &mut query {

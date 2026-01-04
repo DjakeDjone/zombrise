@@ -24,13 +24,8 @@ pub enum ButtonInputState {
     Up = 1,
 }
 
-// TODO: The actual definition of SensorDataRaw is missing.
-// This is a placeholder for now.
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct SensorDataRaw {
-    pub _placeholder: [u8; 64],
-}
+// TODO: This type is opaque in the C header. Using a byte array as placeholder.
+pub type SensorDataRaw = [u8; 64];
 
 // Function pointer types definitions
 pub type EventCallback = extern "C" fn(*const c_char);

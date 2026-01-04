@@ -1,28 +1,25 @@
+#![allow(clippy::type_complexity)]
+// Server main for Zombrise using Lightyear 0.25 networking
+use bevy::prelude::*;
 use bevy::{
-    app::ScheduleRunnerPlugin, asset::AssetPlugin, mesh::MeshPlugin, prelude::*,
-    scene::ScenePlugin, state::app::StatesPlugin,
+    app::ScheduleRunnerPlugin, asset::AssetPlugin, scene::ScenePlugin, state::app::StatesPlugin,
 };
+use std::net::{Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
 use avian3d::prelude::*;
-use bevy_replicon::prelude::*;
-use bevy_replicon::shared::backend::connected_client::NetworkId;
-use bevy_replicon_renet2::{
-    netcode::{NetcodeServerTransport, ServerAuthentication},
-    renet2::{ConnectionConfig, RenetServer},
-    RenetChannelsExt, RepliconRenetPlugins,
-};
+use lightyear::connection::client::Connected;
+use lightyear::prelude::input::native::ActionState;
+use lightyear::prelude::server::*;
+use lightyear::prelude::*;
 use rand::Rng;
-use renet2_netcode::NativeSocket;
-use std::{
-    net::{SocketAddr, UdpSocket},
-    time::SystemTime,
-};
-use zombrise_shared::shared::{MapMarker, MovePlayer, SharedPlugin, TreeMarker, ZombieDamageFlash};
+
+use zombrise_shared::protocol::GameInput;
+use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker, ZombieDamageFlash};
 use zombrise_shared::zombie::zombie::{Zombie, ZombieAnimationState, ZombieDying, ZOMBIE_SPEED};
 use zombrise_shared::{
     entity2::Health,
-    players::player::{DamageFlash, Player, PlayerAttack, PlayerAttackCooldown, PlayerOwner},
+    players::player::{DamageFlash, Player, PlayerAttackCooldown, PlayerOwner},
 };
 
 #[derive(Resource)]
@@ -52,12 +49,15 @@ fn main() {
             ))),
         )
         .add_plugins(AssetPlugin::default())
-        .add_plugins(MeshPlugin)
+        .add_plugins(bevy::log::LogPlugin {
+            level: bevy::log::Level::INFO,
+            filter: "wgpu=error,bevy_render=info,bevy_ecs=info".to_string(),
+            ..default()
+        })
         .add_plugins(ScenePlugin)
         .add_plugins(StatesPlugin)
-        .add_plugins(RepliconPlugins)
-        // .add_message::<ServerEvent>(Channel::Reliable)
-        .add_plugins(RepliconRenetPlugins)
+        .add_plugins(bevy_mesh::MeshPlugin) // Required for Avian3D
+        .add_plugins(ServerPlugins::default()) // Lightyear ServerPlugins
         .add_plugins(SharedPlugin)
         .add_plugins(PhysicsPlugins::default())
         .insert_resource(Time::<Fixed>::from_hz(60.0))
@@ -67,83 +67,85 @@ fn main() {
         )))
         .add_observer(spawn_clients)
         .add_observer(despawn_clients)
-        .add_systems(Startup, setup_server)
-        .add_systems(
-            Update,
-            (
-                handle_move_player,
-                handle_player_attack,
-                update_map_size,
-                spawn_zombies,
-            ),
-        )
+        .add_systems(Startup, (setup_networking, setup_server).chain())
         .add_systems(
             FixedUpdate,
             (
+                handle_player_attack,
                 zombie_movement,
                 zombie_collision_damage,
                 update_damage_flash,
                 update_zombie_damage_flash,
                 update_attack_cooldown,
                 update_dying_zombies,
-                remove_dead_players,
+                // remove_dead_players, // Don't despawn players immediately so death screen can show
                 remove_fallen_entities,
                 passive_health_regeneration,
             ),
         )
+        .add_systems(Update, (update_map_size, spawn_zombies))
         .run();
 }
 
-fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>) {
-    let server_channels_config = network_channels.server_configs();
-    let client_channels_config = network_channels.client_configs();
+/// Setup networking - spawns the server entity with networking components
+fn setup_networking(mut commands: Commands) {
+    use lightyear::prelude::server::{NetcodeConfig, NetcodeServer, Start};
+    use lightyear_udp::server::ServerUdpIo;
 
-    let server = RenetServer::new(ConnectionConfig {
-        server_channels_config,
-        client_channels_config,
-        available_bytes_per_tick: 16 * 1024,
-    });
+    let server_addr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::UNSPECIFIED), 5000);
 
-    let current_time = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap();
-
-    let public_addr: SocketAddr = "0.0.0.0:5000".parse().unwrap();
-    let socket = UdpSocket::bind(public_addr).unwrap();
-    let native_socket = NativeSocket::new(socket).unwrap();
-
-    let socket_addresses = vec![vec![public_addr]];
-    let server_setup_config = bevy_replicon_renet2::netcode::ServerSetupConfig {
-        current_time,
-        max_clients: 10,
-        protocol_id: 0,
-        socket_addresses,
-        authentication: ServerAuthentication::Unsecure,
+    // Create netcode config with matching private key and protocol id
+    let netcode_config = NetcodeConfig {
+        private_key: [0u8; 32], // Must match client's private_key
+        protocol_id: 0,         // Must match client's protocol_id
+        ..Default::default()
     };
 
-    let transport = NetcodeServerTransport::new(server_setup_config, native_socket).unwrap();
+    let netcode_server = NetcodeServer::new(netcode_config);
 
-    commands.insert_resource(server);
-    commands.insert_resource(transport);
+    // Spawn the server networking entity with netcode support
+    use lightyear::prelude::{ReplicationReceiver, ReplicationSender};
+    let server_entity = commands
+        .spawn((
+            Name::new("Server"),
+            LocalAddr(server_addr),
+            ServerUdpIo::default(),
+            netcode_server,
+            ReplicationSender::default(),
+            ReplicationReceiver::default(),
+        ))
+        .id();
 
-    // Add ground (flat surface)
+    // Trigger Start event to begin accepting connections
+    commands.trigger(Start {
+        entity: server_entity,
+    });
+
+    info!(
+        "Server listening on {} with netcode authentication",
+        server_addr
+    );
+}
+
+fn setup_server(mut commands: Commands) {
+    let radius = 28.0;
+
+    // Spawn map with collision
     commands.spawn((
         MapMarker,
-        Replicated,
+        Replicate::to_clients(NetworkTarget::All),
         Transform::from_xyz(0.0, -0.05, 0.0),
+        GlobalTransform::default(),
         RigidBody::Static,
         Collider::cuboid(56.0, 0.1, 56.0),
     ));
 
-    // Spawn trees with collision - positioned at ground level (Y=0)
-    let radius = 28.0;
+    // Spawn trees
     let tree_positions = [
-        // Original trees
         Vec3::new(radius * 0.34, 0.0, radius * 0.4),
         Vec3::new(-radius * 0.36, 0.0, -radius * 0.38),
         Vec3::new(-radius * 0.12, 0.0, -radius * 0.55),
         Vec3::new(radius * 0.55, 0.0, 0.22),
-        // Additional trees for denser forest
         Vec3::new(radius * 0.7, 0.0, radius * 0.65),
         Vec3::new(-radius * 0.72, 0.0, radius * 0.58),
         Vec3::new(radius * 0.15, 0.0, -radius * 0.78),
@@ -163,7 +165,7 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
     for position in tree_positions {
         commands.spawn((
             TreeMarker,
-            Replicated,
+            Replicate::to_clients(NetworkTarget::All),
             Transform::from_translation(position),
             GlobalTransform::default(),
             RigidBody::Static,
@@ -171,125 +173,173 @@ fn setup_server(mut commands: Commands, network_channels: Res<RepliconChannels>)
         ));
     }
 
-    // Giant tree in the corner of the map
+    // Giant tree
     commands.spawn((
         TreeMarker,
-        Replicated,
+        Replicate::to_clients(NetworkTarget::All),
         Transform::from_translation(Vec3::new(radius * 0.9, 0.0, radius * 0.9)),
         GlobalTransform::default(),
         RigidBody::Static,
-        Collider::cylinder(0.6, 4.0), // Larger collider for giant tree
+        Collider::cylinder(0.6, 4.0),
     ));
-
-    println!("Server started on {}", public_addr);
 }
 
-/// Spawns a player when a client connects
+/// Spawns a player when a client connects (Lightyear 0.25 pattern)
 fn spawn_clients(
-    trigger: On<Add, ConnectedClient>,
+    trigger: On<Add, Connected>,
+    query: Query<&RemoteId, With<ClientOf>>,
     mut commands: Commands,
-    network_id_query: Query<&NetworkId>,
 ) {
-    let client_entity = trigger.event().entity;
+    let Ok(remote_id) = query.get(trigger.entity) else {
+        return;
+    };
+    let client_id = remote_id.0;
+    info!("Client connected: {:?}", client_id);
 
-    // Get the NetworkId (renet2 client_id) from the client entity
-    let network_id = network_id_query
-        .get(client_entity)
-        .expect("ConnectedClient should have NetworkId");
-    let client_id = network_id.get();
+    // ClientOf entity needs ReplicationSender for Lightyear to send replicated data
+    use lightyear::prelude::{ReplicationReceiver, ReplicationSender};
+    commands
+        .entity(trigger.entity)
+        .insert((ReplicationSender::default(), ReplicationReceiver::default()));
 
-    println!(
-        "Client {:?} connected with network_id: {}",
-        client_entity, client_id
-    );
+    let player_entity = commands
+        .spawn((
+            Player,
+            PlayerOwner(client_id.to_bits()),
+            Health::default(),
+            DamageFlash::default(),
+            PlayerAttackCooldown::default(),
+            Replicate::to_clients(NetworkTarget::All),
+            PredictionTarget::to_clients(NetworkTarget::Single(client_id)),
+            ControlledBy {
+                owner: trigger.entity,
+                lifetime: Default::default(),
+            },
+            Transform::from_xyz(0.0, 1.0, 0.0),
+            GlobalTransform::default(),
+            ActionState::<GameInput>::default(), // Required for input handling
+        ))
+        .insert((
+            RigidBody::Dynamic,
+            Collider::capsule(0.5, 1.0),
+            LinearVelocity::ZERO,
+            AngularVelocity::ZERO,
+            LockedAxes::new().lock_rotation_x().lock_rotation_z(),
+            LinearDamping(0.5),
+            AngularDamping(20.0),
+        ))
+        .id();
 
-    commands.spawn((
-        Player,
-        PlayerOwner(client_id),
-        Health::default(),
-        DamageFlash::default(),
-        PlayerAttackCooldown::default(),
-        Replicated,
-        Transform::from_xyz(0.0, 1.0, 0.0),
-        GlobalTransform::default(),
-        RigidBody::Dynamic,
-        Collider::capsule(0.5, 1.0),
-        LinearVelocity::ZERO,
-        AngularVelocity::ZERO,
-        LockedAxes::new().lock_rotation_x().lock_rotation_z(),
-        LinearDamping(0.5),
-        AngularDamping(20.0),
-    ));
+    let _ = player_entity; // Suppress unused variable warning
 }
 
 /// Despawns a player when a client disconnects
 fn despawn_clients(
-    trigger: On<Remove, ConnectedClient>,
+    trigger: On<Remove, Connected>,
+    query: Query<&RemoteId>,
     mut commands: Commands,
     players: Query<(Entity, &PlayerOwner)>,
-    network_id_query: Query<&NetworkId>,
 ) {
-    let client_entity = trigger.event().entity;
+    let Ok(remote_id) = query.get(trigger.entity) else {
+        return;
+    };
+    let client_id = remote_id.0;
+    info!("Client disconnected: {:?}", client_id);
 
-    // Get the NetworkId before the entity is fully removed
-    let client_id = network_id_query
-        .get(client_entity)
-        .map(|id| id.get())
-        .unwrap_or(0);
-
-    println!(
-        "Client {:?} disconnected (network_id: {})",
-        client_entity, client_id
-    );
-
-    // Find and despawn the player owned by this client
     for (entity, owner) in &players {
-        if owner.0 == client_id {
+        if owner.0 == client_id.to_bits() {
             commands.entity(entity).despawn();
             break;
         }
     }
 }
 
-fn handle_move_player(
-    mut events: MessageReader<FromClient<MovePlayer>>,
-    mut query: Query<(&PlayerOwner, &mut LinearVelocity, &mut Transform)>,
-    network_id_query: Query<&NetworkId>,
+/// Handle player attacks
+fn handle_player_attack(
+    mut player_query: Query<
+        (
+            Entity,
+            &PlayerOwner,
+            &mut Transform,
+            &mut Health,
+            &mut DamageFlash,
+            &mut PlayerAttackCooldown,
+            &ActionState<GameInput>,
+        ),
+        With<Player>,
+    >,
+    zombie_query: Query<
+        (Entity, &Transform),
+        (With<Zombie>, Without<Player>, Without<ZombieDying>),
+    >,
+    mut zombie_health_query: Query<
+        (&mut Health, &mut ZombieDamageFlash),
+        (With<Zombie>, Without<Player>, Without<ZombieDying>),
+    >,
+    mut commands: Commands,
+    _spatial_query: SpatialQuery,
 ) {
-    let speed = 3.0;
-    for FromClient {
-        message: event,
-        client_id,
-    } in events.read()
+    const ATTACK_RANGE: f32 = 2.5;
+    const ATTACK_DAMAGE: f32 = 25.0;
+
+    for (
+        _player_entity,
+        _owner,
+        mut player_transform,
+        _player_health,
+        _damage_flash,
+        mut cooldown,
+        action_state,
+    ) in &mut player_query
     {
-        // Get NetworkId from the client entity
-        let client_network_id = client_id
-            .entity()
-            .and_then(|e| network_id_query.get(e).ok())
-            .map(|id| id.get())
-            .unwrap_or(0);
+        if cooldown.0 > 0.0 {
+            continue;
+        }
 
-        for (owner, mut velocity, mut transform) in &mut query {
-            if owner.0 != client_network_id {
-                continue;
+        if matches!(action_state.0, GameInput::Attack) {
+            cooldown.0 = 0.5; // Attack cooldown
+
+            let attack_origin = player_transform.translation;
+
+            // Find the closest zombie within range
+            let mut closest_zombie: Option<(Entity, Vec3, f32)> = None; // (entity, to_zombie, distance)
+
+            for (zombie_entity, zombie_transform) in &zombie_query {
+                let to_zombie = zombie_transform.translation - attack_origin;
+                let distance = to_zombie.length();
+
+                if distance <= ATTACK_RANGE
+                    && (closest_zombie.is_none() || distance < closest_zombie.as_ref().unwrap().2)
+                {
+                    closest_zombie = Some((zombie_entity, to_zombie, distance));
+                }
             }
 
-            let yaw_rotation = Quat::from_rotation_y(event.camera_yaw);
-            let rotated_direction = yaw_rotation * event.direction;
+            // If there's a zombie in range, rotate toward it and attack
+            if let Some((zombie_entity, to_zombie, _distance)) = closest_zombie {
+                // Always rotate player toward the closest zombie
+                let dir = to_zombie.normalize();
+                let flat_dir = Vec3::new(dir.x, 0.0, dir.z).normalize_or_zero();
 
-            velocity.x = rotated_direction.x * speed;
-            velocity.z = rotated_direction.z * speed;
-            let horizontal_direction = Vec3::new(rotated_direction.x, 0.0, rotated_direction.z);
-            if horizontal_direction.length() > 0.01 {
-                let target_rotation =
-                    Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
-                transform.rotation = target_rotation;
-            }
+                if flat_dir.length_squared() > 0.0 {
+                    player_transform.look_to(flat_dir, Vec3::Y);
+                }
 
-            if event.direction.y > 0.0 {
-                // Ground check
-                if velocity.y.abs() < 0.1 {
-                    velocity.y = 5.0; // jump velocity
+                // Apply damage to this zombie
+                if let Ok((mut zombie_health, mut zombie_flash)) =
+                    zombie_health_query.get_mut(zombie_entity)
+                {
+                    zombie_health.current -= ATTACK_DAMAGE;
+                    zombie_flash.timer = 0.15;
+
+                    if zombie_health.current <= 0.0 {
+                        // Start dying sequence
+                        commands.entity(zombie_entity).insert(ZombieDying {
+                            timer: 0.0,
+                            fall_duration: 1.0,
+                            burn_duration: 2.0,
+                        });
+                    }
                 }
             }
         }
@@ -301,11 +351,10 @@ fn update_map_size(
     mut map_query: Query<&mut Transform, With<MapMarker>>,
 ) {
     let player_count = player_query.iter().count();
-    if let Ok(mut transform) = map_query.single_mut() {
-        let target_scale = 1.0 + (player_count as f32 * 0.2);
-        if (transform.scale.x - target_scale).abs() > 0.01 {
-            transform.scale = Vec3::splat(target_scale);
-        }
+    let scale = 1.0 + (player_count as f32 * 0.1).min(2.0);
+
+    for mut transform in &mut map_query {
+        transform.scale = Vec3::splat(scale);
     }
 }
 
@@ -315,38 +364,40 @@ fn spawn_zombies(
     mut timer: ResMut<ZombieSpawnTimer>,
     zombie_query: Query<&Zombie>,
 ) {
-    if timer.0.tick(time.delta()).just_finished() {
-        let zombie_count = zombie_query.iter().count();
-        if zombie_count >= 30 {
-            return;
-        }
+    timer.0.tick(time.delta());
 
+    if timer.0.just_finished() && zombie_query.iter().count() < 50 {
         let mut rng = rand::rng();
-        let x = rng.random_range(-20.0..20.0);
-        let z = rng.random_range(-20.0..20.0);
+        let radius = 25.0;
+        let angle: f32 = rng.random_range(0.0..std::f32::consts::TAU);
+        let dist: f32 = rng.random_range(5.0..radius);
+        let x = angle.cos() * dist;
+        let z = angle.sin() * dist;
 
         commands.spawn((
             Zombie,
-            Replicated,
-            Health::default(),
-            ZombieDamageFlash::default(),
+            Health {
+                current: 100.0,
+                max: 100.0,
+            },
+            ZombieDamageFlash { timer: 0.0 },
+            ZombieAnimationState::default(),
+            ZombieBehavior {
+                state: ZombieAiState::default(),
+                timer: Timer::from_seconds(2.0, TimerMode::Repeating),
+                wander_direction: Vec3::ZERO,
+            },
+            Replicate::to_clients(NetworkTarget::All),
             Transform::from_xyz(x, 1.0, z),
             GlobalTransform::default(),
             RigidBody::Dynamic,
-            Collider::capsule(0.3, 0.8),
+            Collider::capsule(0.3, 1.0),
             LinearVelocity::ZERO,
             AngularVelocity::ZERO,
             LockedAxes::new().lock_rotation_x().lock_rotation_z(),
             LinearDamping(0.5),
             AngularDamping(20.0),
-            ZombieAnimationState::default(),
-            ZombieBehavior {
-                state: ZombieAiState::Idle,
-                timer: Timer::from_seconds(rng.random_range(1.0..3.0), TimerMode::Once),
-                wander_direction: Vec3::ZERO,
-            },
         ));
-        println!("Zombie spawned at {}, {}", x, z);
     }
 }
 
@@ -360,162 +411,80 @@ fn zombie_movement(
         ),
         (With<Zombie>, Without<Player>, Without<ZombieDying>),
     >,
-    player_query: Query<&Transform, (With<Player>, Without<Zombie>)>,
+    player_query: Query<(&Transform, &Health), (With<Player>, Without<Zombie>)>,
     time: Res<Time>,
 ) {
-    let speed = ZOMBIE_SPEED;
-    let chase_range = 10.0;
-    const ATTACK_RANGE: f32 = 1.3;
+    const CHASE_RANGE: f32 = 15.0;
+    const ATTACK_RANGE: f32 = 1.5;
 
-    for (mut lin_vel, mut zombie_transform, mut behavior, mut anim_state) in &mut zombie_query {
-        let mut nearest_player_pos: Option<Vec3> = None;
-        let mut min_dist = f32::MAX;
-
-        for player_transform in &player_query {
-            let dist = zombie_transform
-                .translation
-                .distance(player_transform.translation);
-            if dist < min_dist {
-                min_dist = dist;
-                nearest_player_pos = Some(player_transform.translation);
-            }
-        }
-
-        // Check if we should chase or attack
-        if let Some(player_pos) = nearest_player_pos {
-            // Priority 1: Attacking (stop moving)
-            if min_dist < ATTACK_RANGE {
-                behavior.state = ZombieAiState::Attacking;
-
-                // Stop moving
-                lin_vel.x = 0.0;
-                lin_vel.z = 0.0;
-
-                // Rotate to face player
-                let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
-                let horizontal_direction = Vec3::new(direction.x, 0.0, direction.z);
-                if horizontal_direction.length() > 0.01 {
-                    let target_rotation =
-                        Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
-                    zombie_transform.rotation = target_rotation;
-                }
-                continue;
-            } else if min_dist < chase_range {
-                // Priority 2: Chasing (moving)
-                // Hysteresis: only go back to chasing if slightly outside attack range
-                if behavior.state != ZombieAiState::Attacking || min_dist > ATTACK_RANGE + 0.2 {
-                    behavior.state = ZombieAiState::Chasing;
-
-                    // Chase logic
-                    let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
-                    lin_vel.x = direction.x * speed;
-                    lin_vel.z = direction.z * speed;
-
-                    // Rotate to face player
-                    let horizontal_direction = Vec3::new(direction.x, 0.0, direction.z);
-                    if horizontal_direction.length() > 0.01 {
-                        let target_rotation =
-                            Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
-                        zombie_transform.rotation = target_rotation;
-                    }
-                    continue;
-                } else {
-                    // Stay attacking if in hysteresis zone
-                    // Stop moving
-                    lin_vel.x = 0.0;
-                    lin_vel.z = 0.0;
-                    // Rotate to face player
-                    let direction = (player_pos - zombie_transform.translation).normalize_or_zero();
-                    let horizontal_direction = Vec3::new(direction.x, 0.0, direction.z);
-                    if horizontal_direction.length() > 0.01 {
-                        let target_rotation =
-                            Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
-                        zombie_transform.rotation = target_rotation;
-                    }
-                    continue;
-                }
-            }
-        }
-
-        // If we were chasing but lost the player, go back to idle
-        if behavior.state == ZombieAiState::Chasing || behavior.state == ZombieAiState::Attacking {
-            behavior.state = ZombieAiState::Idle;
-            behavior.timer = Timer::from_seconds(1.0, TimerMode::Once);
-        }
-
-        // Handle Idle and Wandering states
+    for (mut velocity, mut transform, mut behavior, mut anim_state) in &mut zombie_query {
         behavior.timer.tick(time.delta());
 
-        match behavior.state {
-            ZombieAiState::Idle => {
-                lin_vel.x = 0.0;
-                lin_vel.z = 0.0;
+        // Find closest player
+        let mut closest_player: Option<Vec3> = None;
+        let mut closest_dist = f32::MAX;
 
-                if behavior.timer.is_finished() {
-                    // Switch to Wandering
-                    behavior.state = ZombieAiState::Wandering;
-                    behavior.timer =
-                        Timer::from_seconds(rand::random::<f32>() * 2.0 + 2.0, TimerMode::Once);
-
-                    // Pick a random direction but stay in bounds
-                    let mut rng = rand::rng();
-                    let mut wander_dir = Vec3::new(
-                        rng.random_range(-1.0..1.0),
-                        0.0,
-                        rng.random_range(-1.0..1.0),
-                    )
-                    .normalize_or_zero();
-
-                    // Boundary check (map is roughly 56x56, so +/- 28 bounds, stay safe within 25)
-                    let future_pos = zombie_transform.translation + wander_dir * 5.0; // Look ahead
-                    if future_pos.x.abs() > 25.0 || future_pos.z.abs() > 25.0 {
-                        // Steer back to center
-                        wander_dir = -zombie_transform.translation.normalize_or_zero();
-                        // Add some randomness so they don't all walk in a straight line to 0,0
-                        wander_dir.x += rng.random_range(-0.5..0.5);
-                        wander_dir.z += rng.random_range(-0.5..0.5);
-                        wander_dir = wander_dir.normalize_or_zero();
-                    }
-
-                    behavior.wander_direction = wander_dir;
-                }
+        for (player_transform, health) in &player_query {
+            if health.current <= 0.0 {
+                continue;
             }
-            ZombieAiState::Wandering => {
-                lin_vel.x = behavior.wander_direction.x * speed;
-                lin_vel.z = behavior.wander_direction.z * speed;
-
-                // Rotate to face movement direction
-                let horizontal_direction = Vec3::new(
-                    behavior.wander_direction.x,
-                    0.0,
-                    behavior.wander_direction.z,
-                );
-                if horizontal_direction.length() > 0.01 {
-                    let target_rotation =
-                        Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_direction.normalize());
-                    zombie_transform.rotation = target_rotation;
-                }
-
-                if behavior.timer.is_finished() {
-                    // Switch to Idle
-                    behavior.state = ZombieAiState::Idle;
-                    behavior.timer =
-                        Timer::from_seconds(rand::random::<f32>() * 2.0 + 1.0, TimerMode::Once);
-                }
+            let dist = transform.translation.distance(player_transform.translation);
+            if dist < closest_dist {
+                closest_dist = dist;
+                closest_player = Some(player_transform.translation);
             }
-            _ => {} // Chasing/Attacking is handled above
         }
 
-        // Sync visual state
-        let new_anim_state = match behavior.state {
-            ZombieAiState::Idle => ZombieAnimationState::Idle,
-            ZombieAiState::Wandering => ZombieAnimationState::Walking,
-            ZombieAiState::Chasing => ZombieAnimationState::Walking,
-            ZombieAiState::Attacking => ZombieAnimationState::Attacking,
-        };
+        // Update AI state
+        if let Some(player_pos) = closest_player {
+            if closest_dist <= ATTACK_RANGE {
+                behavior.state = ZombieAiState::Attacking;
+                *anim_state = ZombieAnimationState::Attacking;
+                velocity.x = 0.0;
+                velocity.z = 0.0;
+            } else if closest_dist <= CHASE_RANGE {
+                behavior.state = ZombieAiState::Chasing;
+                *anim_state = ZombieAnimationState::Running;
 
-        if *anim_state != new_anim_state {
-            *anim_state = new_anim_state;
+                let direction = (player_pos - transform.translation).normalize();
+                velocity.x = direction.x * ZOMBIE_SPEED * 2.0;
+                velocity.z = direction.z * ZOMBIE_SPEED * 2.0;
+
+                // Face player
+                if direction.length() > 0.01 {
+                    let target = Quat::from_rotation_arc(
+                        Vec3::NEG_Z,
+                        Vec3::new(direction.x, 0.0, direction.z).normalize(),
+                    );
+                    transform.rotation = target;
+                }
+            } else {
+                // Wander
+                if behavior.timer.just_finished() {
+                    let mut rng = rand::rng();
+                    let angle: f32 = rng.random_range(0.0..std::f32::consts::TAU);
+                    behavior.wander_direction = Vec3::new(angle.cos(), 0.0, angle.sin());
+                    behavior.state = ZombieAiState::Wandering;
+                }
+
+                match behavior.state {
+                    ZombieAiState::Wandering => {
+                        *anim_state = ZombieAnimationState::Walking;
+                        velocity.x = behavior.wander_direction.x * ZOMBIE_SPEED;
+                        velocity.z = behavior.wander_direction.z * ZOMBIE_SPEED;
+                    }
+                    _ => {
+                        *anim_state = ZombieAnimationState::Idle;
+                        velocity.x = 0.0;
+                        velocity.z = 0.0;
+                    }
+                }
+            }
+        } else {
+            // No players, idle
+            *anim_state = ZombieAnimationState::Idle;
+            velocity.x = 0.0;
+            velocity.z = 0.0;
         }
     }
 }
@@ -525,310 +494,38 @@ fn zombie_collision_damage(
     mut player_query: Query<(&Transform, &mut Health, &mut DamageFlash), With<Player>>,
     time: Res<Time>,
 ) {
+    const DAMAGE_RANGE: f32 = 1.5;
     const DAMAGE_PER_SECOND: f32 = 10.0;
-    const COLLISION_DISTANCE: f32 = 1.5;
 
     for zombie_transform in &zombie_query {
-        for (player_transform, mut health, mut damage_flash) in &mut player_query {
-            let distance = zombie_transform
+        for (player_transform, mut health, mut flash) in &mut player_query {
+            if health.current <= 0.0 {
+                continue;
+            }
+
+            let dist = zombie_transform
                 .translation
                 .distance(player_transform.translation);
-
-            if distance < COLLISION_DISTANCE && health.current > 0.0 {
-                let damage = DAMAGE_PER_SECOND * time.delta_secs();
-                health.current = (health.current - damage).max(0.0);
-                damage_flash.timer = 0.3;
-
-                if health.current <= 0.0 {
-                    println!("Player died!");
-                }
-            }
-        }
-    }
-}
-
-fn handle_player_attack(
-    mut events: MessageReader<FromClient<PlayerAttack>>,
-    mut player_query: Query<
-        (
-            Entity,
-            &PlayerOwner,
-            &mut Transform,
-            &mut Health,
-            &mut DamageFlash,
-            &mut PlayerAttackCooldown,
-        ),
-        (With<Player>, Without<Zombie>),
-    >,
-    mut zombie_query: Query<
-        (Entity, &Transform, &mut Health, &mut ZombieDamageFlash),
-        (With<Zombie>, Without<Player>),
-    >,
-    mut commands: Commands,
-    network_id_query: Query<&NetworkId>,
-    spatial_query: SpatialQuery,
-) {
-    const ATTACK_RANGE: f32 = 2.0;
-    const ATTACK_ANGLE: f32 = 0.5; // ~60 degrees half-angle
-    const PLAYER_DAMAGE: f32 = 10.0;
-    const ZOMBIE_DAMAGE: f32 = 50.0; // 2 hits to kill a zombie
-
-    for FromClient { client_id, .. } in events.read() {
-        println!("Attack received from client {:?}", client_id);
-        let mut attacker_info: Option<(Entity, Transform)> = None;
-
-        // Get NetworkId from the client entity
-        let client_network_id = client_id
-            .entity()
-            .and_then(|e| network_id_query.get(e).ok())
-            .map(|id| id.get())
-            .unwrap_or(0);
-
-        // Find attacker corresponding to this client_id
-        for (entity, owner, transform, _, _, _) in &player_query {
-            if owner.0 == client_network_id {
-                attacker_info = Some((entity, *transform));
-                break;
-            }
-        }
-
-        if let Some((attacker_entity, attacker_transform)) = attacker_info {
-            // Check cooldown first
-            {
-                let (_, _, _, _, _, cooldown) = player_query.get(attacker_entity).unwrap();
-                if cooldown.0 > 0.0 {
-                    continue;
-                }
-            }
-
-            let mut attacker_transform_final = attacker_transform.clone();
-
-            // --- Auto-aim Logic ---
-            // Find closest target to rotate towards
-            let mut closest_target_pos: Option<Vec3> = None;
-            let mut closest_dist_sq = 100.0; // 10 units range for aim assist (matches client)
-
-            // Check zombies
-            for (_, zombie_transform, _, _) in &zombie_query {
-                let d2 = attacker_transform
-                    .translation
-                    .distance_squared(zombie_transform.translation);
-                if d2 < closest_dist_sq {
-                    closest_dist_sq = d2;
-                    closest_target_pos = Some(zombie_transform.translation);
-                }
-            }
-
-            // Check other players
-            for (p_entity, _, p_transform, _, _, _) in &player_query {
-                if p_entity != attacker_entity {
-                    let d2 = attacker_transform
-                        .translation
-                        .distance_squared(p_transform.translation);
-                    if d2 < closest_dist_sq {
-                        closest_dist_sq = d2;
-                        closest_target_pos = Some(p_transform.translation);
-                    }
-                }
-            }
-
-            // If target found, rotate attacker
-            if let Some(target_pos) = closest_target_pos {
-                println!("Auto-aim found target at {:?}", target_pos);
-                let diff = target_pos - attacker_transform.translation;
-                let horizontal_diff = Vec3::new(diff.x, 0.0, diff.z);
-
-                if horizontal_diff.length_squared() > 0.001 {
-                    let target_dir = horizontal_diff.normalize();
-                    let target_rotation = Quat::from_rotation_arc(Vec3::NEG_Z, target_dir);
-
-                    // Update transform in query and local copy
-                    if let Ok((_, _, mut t, _, _, _)) = player_query.get_mut(attacker_entity) {
-                        t.rotation = target_rotation;
-                        attacker_transform_final.rotation = target_rotation;
-                        println!("Rotated player toward target");
-                    }
-                }
-            } else {
-                println!("No auto-aim target found within range");
-            }
-            // ----------------------
-
-            // Update cooldown (needs mutable access again)
-            if let Ok((_, _, _, _, _, mut cooldown)) = player_query.get_mut(attacker_entity) {
-                cooldown.0 = 0.5; // 0.5 seconds cooldown
-            }
-
-            let attacker_pos = attacker_transform_final.translation;
-            let attacker_forward = *attacker_transform_final.forward();
-
-            // Attack zombies
-            for (zombie_entity, zombie_transform, mut zombie_health, mut zombie_damage_flash) in
-                &mut zombie_query
-            {
-                let distance = attacker_pos.distance(zombie_transform.translation);
-
-                if distance < ATTACK_RANGE {
-                    // Calculate horizontal direction to target (Y=0 to match auto-aim)
-                    let diff = zombie_transform.translation - attacker_pos;
-                    let horizontal_diff = Vec3::new(diff.x, 0.0, diff.z);
-
-                    // Only check angle if there's meaningful horizontal distance
-                    if horizontal_diff.length() > 0.1 {
-                        let to_target = horizontal_diff.normalize();
-                        let horizontal_forward =
-                            Vec3::new(attacker_forward.x, 0.0, attacker_forward.z).normalize();
-
-                        // Check angle using horizontal directions only
-                        if horizontal_forward.dot(to_target) < ATTACK_ANGLE {
-                            continue;
-                        }
-                    }
-
-                    // Hit confirmed - removed strict raycast check for melee combat
-                    // Angle and distance checks are sufficient for close-range attacks
-                    zombie_health.current = (zombie_health.current - ZOMBIE_DAMAGE).max(0.0);
-                    zombie_damage_flash.timer = 0.5; // Trigger hit animation
-
-                    if zombie_health.current == 0.0 {
-                        // Start death sequence instead of immediate despawn
-                        commands.entity(zombie_entity).insert(ZombieDying {
-                            timer: 0.0,
-                            fall_duration: 2.0,  // 2 seconds for death animation
-                            burn_duration: 3.0,  // 3 seconds of burning
-                        });
-                        // Reward player with max health increase
-                        if let Ok((_, _, _, mut attacker_health, _, _)) =
-                            player_query.get_mut(attacker_entity)
-                        {
-                            attacker_health.max += 5.0;
-                            attacker_health.current += 5.0; // Also heal the amount gained
-                        }
-                    }
-
-                    println!("Player attacked zombie at distance {}", distance);
-                }
-            }
-
-            // Attack players
-            let mut killed_player_count = 0;
-            for (entity, _, transform, mut health, mut damage_flash, _) in &mut player_query {
-                if entity != attacker_entity {
-                    let distance = attacker_pos.distance(transform.translation);
-
-                    if distance < ATTACK_RANGE {
-                        let diff = transform.translation - attacker_pos;
-
-                        if let Ok(to_target) = Dir3::new(diff) {
-                            // Check angle
-                            if attacker_forward.dot(*to_target) < ATTACK_ANGLE {
-                                continue;
-                            }
-
-                            // Check line of sight (raycast)
-                            let filter =
-                                SpatialQueryFilter::from_excluded_entities([attacker_entity]);
-                            if let Some(hit) = spatial_query.cast_ray(
-                                attacker_pos,
-                                to_target,
-                                distance,
-                                true,
-                                &filter,
-                            ) {
-                                if hit.entity != entity {
-                                    continue;
-                                }
-                            }
-                        }
-
-                        // Hit confirmed
-                        health.current = (health.current - PLAYER_DAMAGE).max(0.0);
-                        damage_flash.timer = 0.3;
-
-                        if health.current == 0.0 {
-                            killed_player_count += 1;
-                        }
-
-                        println!("Player attacked another player at distance {}", distance);
-                    }
-                }
-            }
-
-            if killed_player_count > 0 {
-                // Reward attacker with max health increase
-                if let Ok((_, _, _, mut attacker_health, _, _)) =
-                    player_query.get_mut(attacker_entity)
-                {
-                    let bonus = 10.0 * killed_player_count as f32;
-                    attacker_health.max += bonus;
-                    attacker_health.current += bonus; // Also heal the amount gained
-                }
+            if dist <= DAMAGE_RANGE {
+                health.current -= DAMAGE_PER_SECOND * time.delta_secs();
+                flash.timer = 0.1;
             }
         }
     }
 }
 
 fn update_damage_flash(mut query: Query<&mut DamageFlash>, time: Res<Time>) {
-    for mut damage_flash in &mut query {
-        if damage_flash.timer > 0.0 {
-            damage_flash.timer -= time.delta_secs();
-            if damage_flash.timer < 0.0 {
-                damage_flash.timer = 0.0;
-            }
+    for mut flash in &mut query {
+        if flash.timer > 0.0 {
+            flash.timer -= time.delta_secs();
         }
     }
 }
 
 fn update_zombie_damage_flash(mut query: Query<&mut ZombieDamageFlash>, time: Res<Time>) {
-    for mut damage_flash in &mut query {
-        if damage_flash.timer > 0.0 {
-            damage_flash.timer -= time.delta_secs();
-            if damage_flash.timer < 0.0 {
-                damage_flash.timer = 0.0;
-            }
-        }
-    }
-}
-
-fn remove_dead_players(
-    mut commands: Commands,
-    player_query: Query<(Entity, &Health, &PlayerOwner), With<Player>>,
-    mut server: ResMut<RenetServer>,
-) {
-    for (entity, health, owner) in &player_query {
-        if health.current <= 0.0 {
-            println!("Removing dead player (Client ID: {:?})", owner.0);
-            commands.entity(entity).despawn();
-            server.disconnect(owner.0);
-        }
-    }
-}
-
-fn remove_fallen_entities(
-    mut commands: Commands,
-    player_query: Query<(Entity, &Transform, &PlayerOwner), With<Player>>,
-    zombie_query: Query<(Entity, &Transform), With<Zombie>>,
-    mut server: ResMut<RenetServer>,
-) {
-    const FALL_DEATH_Y: f32 = -10.0;
-
-    // Remove fallen players
-    for (entity, transform, owner) in &player_query {
-        if transform.translation.y < FALL_DEATH_Y {
-            println!("Player fell to death (Client ID: {:?})", owner.0);
-            commands.entity(entity).despawn();
-            server.disconnect(owner.0);
-        }
-    }
-
-    // Remove fallen zombies
-    for (entity, transform) in &zombie_query {
-        if transform.translation.y < FALL_DEATH_Y {
-            println!(
-                "Zombie fell to death at position: {:?}",
-                transform.translation
-            );
-            commands.entity(entity).despawn();
+    for mut flash in &mut query {
+        if flash.timer > 0.0 {
+            flash.timer -= time.delta_secs();
         }
     }
 }
@@ -837,52 +534,61 @@ fn update_attack_cooldown(mut query: Query<&mut PlayerAttackCooldown>, time: Res
     for mut cooldown in &mut query {
         if cooldown.0 > 0.0 {
             cooldown.0 -= time.delta_secs();
-            if cooldown.0 < 0.0 {
-                cooldown.0 = 0.0;
-            }
         }
     }
 }
 
-/// Updates dying zombies - progresses the death timer and despawns when complete.
-/// Also sets the animation state to Dying and disables AI behavior.
 fn update_dying_zombies(
     mut commands: Commands,
     mut dying_query: Query<
-        (Entity, &mut ZombieDying, &mut ZombieAnimationState, &mut LinearVelocity),
+        (
+            Entity,
+            &mut ZombieDying,
+            &mut ZombieAnimationState,
+            &mut LinearVelocity,
+        ),
         With<Zombie>,
     >,
     time: Res<Time>,
 ) {
     for (entity, mut dying, mut anim_state, mut velocity) in &mut dying_query {
-        // Ensure the dying animation is playing
-        if *anim_state != ZombieAnimationState::Dying {
-            *anim_state = ZombieAnimationState::Dying;
-        }
-
-        // Stop horizontal movement - let gravity handle the fall
+        dying.timer += time.delta_secs();
+        *anim_state = ZombieAnimationState::Dying;
         velocity.x = 0.0;
         velocity.z = 0.0;
 
-        // Progress the death timer
-        dying.timer += time.delta_secs();
-
-        // Check if death sequence is complete (fall + burn)
-        let total_duration = dying.fall_duration + dying.burn_duration;
-        if dying.timer >= total_duration {
+        if dying.timer >= dying.fall_duration + dying.burn_duration {
             commands.entity(entity).despawn();
-            println!("Dying zombie despawned after death sequence");
+        }
+    }
+}
+
+fn remove_fallen_entities(
+    mut commands: Commands,
+    player_query: Query<(Entity, &Transform), With<Player>>,
+    zombie_query: Query<(Entity, &Transform), With<Zombie>>,
+) {
+    const FALL_THRESHOLD: f32 = -10.0;
+
+    for (entity, transform) in &player_query {
+        if transform.translation.y < FALL_THRESHOLD {
+            commands.entity(entity).despawn();
+        }
+    }
+
+    for (entity, transform) in &zombie_query {
+        if transform.translation.y < FALL_THRESHOLD {
+            commands.entity(entity).despawn();
         }
     }
 }
 
 fn passive_health_regeneration(mut query: Query<&mut Health, With<Player>>, time: Res<Time>) {
-    const REGEN_PER_SECOND: f32 = 1.0;
+    const REGEN_RATE: f32 = 2.0;
 
     for mut health in &mut query {
-        if health.current > 0.0 && health.current < health.max {
-            health.current =
-                (health.current + REGEN_PER_SECOND * time.delta_secs()).min(health.max);
+        if health.current < health.max {
+            health.current = (health.current + REGEN_RATE * time.delta_secs()).min(health.max);
         }
     }
 }

@@ -1,7 +1,7 @@
 use bevy::{ecs::component::Component, reflect::Reflect};
 use serde::{Deserialize, Serialize};
 
-#[derive(Component, Serialize, Deserialize, Reflect, Clone)]
+#[derive(Component, Serialize, Deserialize, Reflect, Clone, PartialEq)]
 pub struct Health {
     pub current: f32,
     pub max: f32,

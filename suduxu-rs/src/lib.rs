@@ -130,9 +130,7 @@ impl Suduxu {
             self.lib
                 .get::<ffi::GetSensorDataFn>(b"get_sensor_data")
                 .map(|f| f(client_id))
-                .unwrap_or(SensorDataRaw {
-                    _placeholder: [0; 64],
-                })
+                .unwrap_or([0; 64])
         }
     }
 

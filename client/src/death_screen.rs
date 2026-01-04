@@ -61,7 +61,7 @@ pub fn show_death_screen(
                     position_type: PositionType::Absolute,
                     ..default()
                 },
-                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.85).into()),
+                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.85)),
                 ZIndex(1000),
                 DeathScreenMarker,
             ))

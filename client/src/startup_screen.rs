@@ -53,7 +53,7 @@ pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConf
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
-            BackgroundColor(Color::srgb(0.15, 0.15, 0.2).into()),
+            BackgroundColor(Color::srgb(0.15, 0.15, 0.2)),
             StartupScreenMarker,
         ))
         .with_children(|parent| {
@@ -99,7 +99,7 @@ pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConf
                     border: UiRect::all(Val::Px(2.0)),
                     ..default()
                 },
-                BackgroundColor(Color::srgb(0.2, 0.2, 0.25).into()),
+                BackgroundColor(Color::srgb(0.2, 0.2, 0.25)),
                 // BorderColor::all(Color::srgb(0.4, 0.4, 0.5).into()),
                 TextInput,
                 TextInputTextFont(TextFont {
@@ -134,7 +134,7 @@ pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConf
                                 justify_content: JustifyContent::Center,
                                 ..default()
                             },
-                            BackgroundColor(Color::srgb(0.2, 0.2, 0.25).into()),
+                            BackgroundColor(Color::srgb(0.2, 0.2, 0.25)),
                             LocalButton,
                         ))
                         .with_children(|button_parent| {
@@ -151,7 +151,7 @@ pub fn show_startup_screen(mut commands: Commands, server_config: Res<ServerConf
                                 justify_content: JustifyContent::Center,
                                 ..default()
                             },
-                            BackgroundColor(Color::srgb(0.2, 0.2, 0.25).into()),
+                            BackgroundColor(Color::srgb(0.2, 0.2, 0.25)),
                             RemoteButton,
                         ))
                         .with_children(|button_parent| {
@@ -243,45 +243,48 @@ pub fn handle_copy_paste(
         return;
     }
 
-    // Process keys
-    for ev in evr_kbd.read() {
-        if !ev.state.is_pressed() {
-            continue;
-        }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // Process keys
+        for ev in evr_kbd.read() {
+            if !ev.state.is_pressed() {
+                continue;
+            }
 
-        if let Ok(mut input_value) = input_query.single_mut() {
-            match ev.key_code {
-                // Copy
-                KeyCode::KeyC => {
-                    if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                        if let Err(e) = clipboard.set_text(&input_value.0) {
-                            eprintln!("Failed to copy to clipboard: {}", e);
+            if let Ok(mut input_value) = input_query.single_mut() {
+                match ev.key_code {
+                    // Copy
+                    KeyCode::KeyC => {
+                        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                            if let Err(e) = clipboard.set_text(&input_value.0) {
+                                eprintln!("Failed to copy to clipboard: {}", e);
+                            }
                         }
                     }
-                }
-                // Paste
-                KeyCode::KeyV => {
-                    if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                        if let Ok(text) = clipboard.get_text() {
-                            input_value.0 = text;
+                    // Paste
+                    KeyCode::KeyV => {
+                        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                            if let Ok(text) = clipboard.get_text() {
+                                input_value.0 = text;
+                            }
                         }
                     }
-                }
-                // Cut
-                KeyCode::KeyX => {
-                    if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                        if let Err(e) = clipboard.set_text(&input_value.0) {
-                            eprintln!("Failed to cut to clipboard: {}", e);
-                        } else {
-                            input_value.0.clear();
+                    // Cut
+                    KeyCode::KeyX => {
+                        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                            if let Err(e) = clipboard.set_text(&input_value.0) {
+                                eprintln!("Failed to cut to clipboard: {}", e);
+                            } else {
+                                input_value.0.clear();
+                            }
                         }
                     }
+                    // Select All
+                    KeyCode::KeyA => {
+                        // Selection not visible, but acknowledge shortcut
+                    }
+                    _ => {}
                 }
-                // Select All
-                KeyCode::KeyA => {
-                    // Selection not visible, but acknowledge shortcut
-                }
-                _ => {}
             }
         }
     }

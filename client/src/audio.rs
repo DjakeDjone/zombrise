@@ -31,10 +31,6 @@ struct AudioState {
 }
 
 pub fn setup_audio_nonsend(world: &mut World) {
-    if let Ok(cwd) = std::env::current_dir() {
-        println!("Audio: Current Working Directory: {:?}", cwd);
-    }
-
     let music_file_name = "Chateau Grand-v1.8.sf2";
 
     let mut sf2_path = format!("assets/{}", music_file_name);
@@ -47,13 +43,11 @@ pub fn setup_audio_nonsend(world: &mut World) {
             let install_path = format!("/usr/share/zombrise/assets/{}", music_file_name);
             if std::path::Path::new(&install_path).exists() {
                 sf2_path = install_path;
-            } else {
-                if let Ok(exe_path) = std::env::current_exe() {
-                    if let Some(exe_dir) = exe_path.parent() {
-                        let exe_asset = exe_dir.join("assets").join(music_file_name);
-                        if exe_asset.exists() {
-                            sf2_path = exe_asset.to_string_lossy().to_string();
-                        }
+            } else if let Ok(exe_path) = std::env::current_exe() {
+                if let Some(exe_dir) = exe_path.parent() {
+                    let exe_asset = exe_dir.join("assets").join(music_file_name);
+                    if exe_asset.exists() {
+                        sf2_path = exe_asset.to_string_lossy().to_string();
                     }
                 }
             }
@@ -71,10 +65,6 @@ pub fn setup_audio_nonsend(world: &mut World) {
                 current_intensity: Intensity::Calm,
                 timer: Timer::from_seconds(0.1, TimerMode::Repeating),
             });
-            println!(
-                "Audio System Initialized (NonSend) with SoundFont: {}",
-                sf2_path
-            );
         }
         Err(e) => eprintln!("Failed to initialize audio: {}", e),
     }
@@ -130,9 +120,7 @@ fn update_music_state(
                 }
             }
 
-            let new_intensity = if am_attacking {
-                Intensity::Combat
-            } else if close_zombies > 2 {
+            let new_intensity = if am_attacking || close_zombies > 2 {
                 Intensity::Combat
             } else if close_zombies > 0 {
                 Intensity::Tension
@@ -158,7 +146,6 @@ fn manage_music_playback(
             if target != system.current_intensity {
                 system.current_intensity = target;
                 changed = true;
-                println!("Music Intensity Changed to: {:?}", target);
             }
         }
 

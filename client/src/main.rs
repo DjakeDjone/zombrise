@@ -1,44 +1,38 @@
+#![allow(clippy::type_complexity)]
+
 use bevy::animation::{AnimationPlayer, AnimationTarget};
 use bevy::camera::primitives::Aabb;
 use bevy::ecs::hierarchy::ChildOf;
+use bevy::ecs::relationship::Relationship;
 use bevy::gltf::{
     GltfExtras, GltfMaterialExtras, GltfMaterialName, GltfMeshExtras, GltfMeshName, GltfSceneExtras,
 };
-
 use bevy::input::mouse::MouseMotion;
-use bevy::mesh::skinning::SkinnedMesh;
-use bevy::pbr::prelude::*;
 use bevy::prelude::*;
-use bevy::scene::SceneRoot;
-use bevy::window::{CursorGrabMode, CursorOptions, PresentMode, PrimaryWindow, WindowPlugin};
-use bevy_replicon::prelude::*;
-use bevy_replicon_renet2::{
-    netcode::{ClientAuthentication, NetcodeClientTransport},
-    renet2::{ConnectionConfig, RenetClient},
-    RenetChannelsExt, RepliconRenetPlugins,
-};
+use bevy::window::{CursorGrabMode, CursorOptions, PresentMode, PrimaryWindow};
+use bevy_mesh::skinning::SkinnedMesh;
 use bevy_simple_text_input::TextInputPlugin;
-use renet2_netcode::NativeSocket;
-use std::{
-    net::{SocketAddr, ToSocketAddrs, UdpSocket},
-    time::SystemTime,
-};
+use std::time::SystemTime;
+
+use lightyear::prelude::client::*;
+
+use std::net::{SocketAddr, ToSocketAddrs};
 use zombrise_shared::entity2::Health;
 use zombrise_shared::players::player::{
-    handle_input, CameraRotation, DamageFlash, LocalPlayerPosition, LocalPlayerRotation,
-    MainCamera, MyClientId, Player, PlayerOwner,
+    CameraRotation, DamageFlash, LocalPlayerPosition, LocalPlayerRotation, MainCamera, MyClientId,
+    Player, PlayerOwner,
 };
 use zombrise_shared::players::player_animation::{
     control_player_animation, setup_player_animation, trigger_player_attack_animation,
     update_player_animation_state, update_player_attack_timer, update_player_idle_variations,
     update_player_prev_positions, PlayerAttacking,
 };
+
 use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker, ZombieDying};
-use zombrise_shared::suduxu::SuduxuPlugin;
+
 use zombrise_shared::zombie::zombie::{
-    add_zombie_animation_events, control_zombie_animation, handle_zombie_animation_events,
-    setup_zombie_animation, update_zombie_animation_state, Zombie, ZombieAnimationEvent,
-    ZombieAnimationEventsState, ZombieLink,
+    add_zombie_animation_events, control_zombie_animation, setup_zombie_animation,
+    update_zombie_animation_state, Zombie, ZombieAnimationEventsState, ZombieLink,
 };
 
 mod map;
@@ -64,247 +58,319 @@ use loading_screen::{
     check_loading_progress, cleanup_loading_screen, show_loading_screen, start_loading_assets,
 };
 
-fn client_event_system(client: Res<RenetClient>, mut player_died: ResMut<PlayerDied>) {
-    if client.is_disconnected() {
-        if !player_died.0 {
-            println!("Client disconnected");
-            player_died.0 = true;
+// MyClientId is now imported from zombrise_shared::players::player
+
+// --- Marker Components ---
+#[derive(Component)]
+pub struct ZombieVisual;
+
+#[derive(Component)]
+struct PlayerVisualsSpawned;
+
+#[derive(Component)]
+struct PlayerVisualMesh;
+
+#[derive(Component)]
+struct ZombieVisualsSpawned;
+
+#[derive(Component)]
+struct MapVisualsSpawned;
+
+#[derive(Component)]
+struct TreeVisualsSpawned;
+
+#[derive(Component)]
+struct HealthBarUI;
+
+#[derive(Component)]
+struct HealthBarFill;
+
+#[derive(Component)]
+struct HealthText;
+// -------------------------
+
+fn main() {
+    #[cfg(target_arch = "wasm32")]
+    console_error_panic_hook::set_once();
+
+    let mut app = App::new();
+    #[cfg(not(target_arch = "wasm32"))]
+    app.add_plugins(zombrise_shared::suduxu::SuduxuPlugin);
+
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    present_mode: PresentMode::Fifo,
+                    fit_canvas_to_parent: true,
+                    ..default()
+                }),
+                ..default()
+            })
+            .set(bevy::log::LogPlugin {
+                level: bevy::log::Level::INFO,
+                filter: "wgpu=error,bevy_render=info,bevy_ecs=info,lightyear=info".to_string(),
+                ..default()
+            }),
+    )
+    .add_plugins(ClientPlugins::default())
+    .add_plugins(SharedPlugin)
+    .add_plugins(TextInputPlugin)
+    .add_plugins(GameAudioPlugin)
+    .add_plugins(SnowfallPlugin)
+    .init_state::<AppState>()
+    .init_resource::<ServerConfig>()
+    .insert_resource(CameraRotation {
+        yaw: 0.0,
+        pitch: -0.3,
+    })
+    .init_resource::<PlayerDied>()
+    .init_resource::<MyClientId>()
+    .init_resource::<ZombieAnimationEventsState>()
+    .add_systems(Startup, setup_camera)
+    .register_type::<Transform>()
+    .register_type::<GlobalTransform>()
+    .register_type::<Visibility>()
+    .register_type::<InheritedVisibility>()
+    .register_type::<ViewVisibility>()
+    .register_type::<bevy::transform::components::TransformTreeChanged>()
+    .register_type::<Children>()
+    .register_type::<ChildOf>()
+    .register_type::<Name>()
+    .register_type::<AnimationTarget>()
+    .register_type::<AnimationPlayer>()
+    .register_type::<SkinnedMesh>()
+    .register_type::<MeshMaterial3d<StandardMaterial>>()
+    .register_type::<Mesh3d>()
+    .register_type::<Aabb>()
+    .register_type::<GltfMeshName>()
+    .register_type::<GltfMaterialName>()
+    .register_type::<GltfExtras>()
+    .register_type::<GltfSceneExtras>()
+    .register_type::<GltfMeshExtras>()
+    .register_type::<GltfMaterialExtras>()
+    .add_systems(OnEnter(AppState::StartupScreen), show_startup_screen)
+    .add_systems(OnExit(AppState::StartupScreen), cleanup_startup_screen)
+    .add_systems(
+        Update,
+        (
+            handle_startup_ui,
+            handle_copy_paste,
+            handle_quick_connect_buttons,
+        )
+            .run_if(in_state(AppState::StartupScreen)),
+    )
+    // Loading state systems
+    .add_systems(
+        OnEnter(AppState::Loading),
+        (show_loading_screen, start_loading_assets),
+    )
+    .add_systems(
+        Update,
+        check_loading_progress.run_if(in_state(AppState::Loading)),
+    )
+    .add_systems(OnExit(AppState::Loading), cleanup_loading_screen)
+    .add_systems(
+        OnEnter(AppState::Playing),
+        (
+            setup,
+            setup_client,
+            lock_cursor,
+            activate_game_cameras,
+            setup_fire_assets,
+        ),
+    )
+    .add_systems(OnExit(AppState::Playing), cleanup_playing_state)
+    .add_systems(
+        Update,
+        (add_input_manager, handle_camera_rotation, camera_follow).chain(),
+    )
+    .add_systems(
+        Update,
+        (
+            spawn_player_visuals,
+            spawn_map_visuals,
+            spawn_zombie_visuals,
+            update_zombie_visuals_transform,
+            cleanup_orphaned_zombie_visuals,
+        ),
+    )
+    .add_systems(
+        Update,
+        (
+            setup_zombie_animation,
+            update_zombie_animation_state,
+            control_zombie_animation,
+            add_zombie_animation_events,
+            spawn_tree_visuals,
+        ),
+    )
+    .add_systems(
+        Update,
+        (
+            fix_zombie_frustum_culling,
+            spawn_zombie_fire,
+            update_zombie_fire,
+            animate_fire_particles,
+            update_dying_zombie_visuals,
+        )
+            .run_if(in_state(AppState::Playing)),
+    )
+    .add_systems(
+        Update,
+        (
+            setup_player_animation,
+            trigger_player_attack_animation,
+            update_player_attack_timer,
+            update_player_idle_variations,
+            animate_player_damage,
+            display_health_bar,
+            detect_player_death,
+            show_death_screen,
+            handle_death_screen_input,
+            handle_escape_key,
+            handle_lock_key,
+            (
+                update_player_animation_state,
+                control_player_animation,
+                update_player_prev_positions,
+            )
+                .chain(),
+        )
+            .run_if(in_state(AppState::Playing)),
+    )
+    .run();
+}
+
+fn setup_client(mut commands: Commands, server_config: Res<ServerConfig>) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        // Networking disabled on WASM
+        return;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use lightyear::prelude::client::{NetcodeClient, NetcodeConfig};
+        use lightyear::prelude::Authentication;
+        use lightyear_udp::UdpIo;
+
+        let server_addr: SocketAddr = server_config
+            .url
+            .to_socket_addrs()
+            .expect("Failed to resolve server address")
+            .find(|addr| addr.is_ipv4()) // Prefer IPv4
+            .or_else(|| server_config.url.to_socket_addrs().ok()?.next())
+            .expect("No address found for server");
+
+        info!("Connecting to server at: {}", server_addr);
+
+        let current_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap();
+        let client_id = current_time.as_millis() as u64;
+
+        // Create authentication with Manual mode for testing
+        let auth = Authentication::Manual {
+            server_addr,
+            client_id,
+            private_key: [0u8; 32], // Match server's private key
+            protocol_id: 0,         // Match server's protocol id
+        };
+
+        // Create NetcodeClient with authentication
+        let netcode_config = NetcodeConfig::default();
+        match NetcodeClient::new(auth, netcode_config) {
+            Ok(netcode_client) => {
+                // Spawn the client networking entity with LocalAddr for UDP binding
+                use lightyear::prelude::{LocalAddr, ReplicationReceiver, ReplicationSender};
+                let client_local_addr = SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+                    0, // Let OS assign an available port
+                );
+
+                let client_entity = commands
+                    .spawn((
+                        Name::new("NetworkClient"),
+                        LocalAddr(client_local_addr),
+                        netcode_client,
+                        UdpIo::default(),
+                        ReplicationReceiver::default(),
+                        ReplicationSender::default(),
+                    ))
+                    .id();
+
+                // Trigger Connect event to initiate connection
+                use lightyear::prelude::client::Connect;
+                commands.trigger(Connect {
+                    entity: client_entity,
+                });
+            }
+            Err(e) => {
+                error!("Failed to create NetcodeClient: {:?}", e);
+            }
         }
-    } else if player_died.0 {
-        player_died.0 = false;
+
+        // Set the client ID immediately so we can identify our player
+        commands.insert_resource(MyClientId(client_id));
     }
 }
 
-// MyClientId is now imported from zombrise_shared::players::player
-
-fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                present_mode: PresentMode::Fifo,
-                ..default()
-            }),
-            ..default()
-        }))
-        .add_plugins(RepliconPlugins)
-        .add_plugins(RepliconRenetPlugins)
-        .add_plugins(SharedPlugin)
-        .add_plugins(TextInputPlugin)
-        .add_plugins(SuduxuPlugin)
-        .add_plugins(GameAudioPlugin)
-        .add_plugins(SnowfallPlugin)
-        .init_state::<AppState>()
-        .init_resource::<ServerConfig>()
-        .insert_resource(CameraRotation {
-            yaw: 0.0,
-            pitch: -0.3,
-        })
-        .init_resource::<PlayerDied>()
-        .init_resource::<MyClientId>()
-        .init_resource::<ZombieAnimationEventsState>()
-        .add_message::<ZombieAnimationEvent>()
-        .add_systems(Startup, setup_camera)
-        .register_type::<Transform>()
-        .register_type::<GlobalTransform>()
-        .register_type::<Visibility>()
-        .register_type::<InheritedVisibility>()
-        .register_type::<ViewVisibility>()
-        .register_type::<bevy::transform::components::TransformTreeChanged>()
-        .register_type::<Children>()
-        .register_type::<ChildOf>()
-        .register_type::<Name>()
-        .register_type::<AnimationTarget>()
-        .register_type::<AnimationPlayer>()
-        .register_type::<SkinnedMesh>()
-        .register_type::<MeshMaterial3d<StandardMaterial>>()
-        .register_type::<Mesh3d>()
-        .register_type::<Aabb>()
-        .register_type::<GltfMeshName>()
-        .register_type::<GltfMaterialName>()
-        .register_type::<GltfExtras>()
-        .register_type::<GltfSceneExtras>()
-        .register_type::<GltfMeshExtras>()
-        .register_type::<GltfMaterialExtras>()
-        .add_systems(OnEnter(AppState::StartupScreen), show_startup_screen)
-        .add_systems(OnExit(AppState::StartupScreen), cleanup_startup_screen)
-        .add_systems(
-            Update,
-            (
-                handle_startup_ui,
-                handle_copy_paste,
-                handle_quick_connect_buttons,
-            )
-                .run_if(in_state(AppState::StartupScreen)),
-        )
-        // Loading state systems
-        .add_systems(
-            OnEnter(AppState::Loading),
-            (show_loading_screen, start_loading_assets),
-        )
-        .add_systems(
-            Update,
-            check_loading_progress.run_if(in_state(AppState::Loading)),
-        )
-        .add_systems(OnExit(AppState::Loading), cleanup_loading_screen)
-        .add_systems(
-            OnEnter(AppState::Playing),
-            (setup, setup_client, lock_cursor, activate_game_cameras, setup_fire_assets),
-        )
-        .add_systems(OnExit(AppState::Playing), cleanup_playing_state)
-        .add_systems(
-            Update,
-            (
-                client_event_system,
-                (
-                    handle_client_auto_aim,
-                    handle_camera_rotation,
-                    handle_input.before(trigger_player_attack_animation),
-                    camera_follow,
-                )
-                    .chain(),
-                spawn_player_visuals,
-                spawn_map_visuals,
-                spawn_zombie_visuals,
-                update_zombie_visuals_transform,
-                cleanup_orphaned_zombie_visuals,
-                setup_zombie_animation,
-                update_zombie_animation_state,
-                control_zombie_animation,
-                add_zombie_animation_events,
-                handle_zombie_animation_events,
-                spawn_tree_visuals,
-                fix_zombie_frustum_culling,
-                spawn_zombie_fire,
-                update_zombie_fire,
-                animate_fire_particles,
-                update_dying_zombie_visuals,
-            )
-                .run_if(in_state(AppState::Playing)),
-        )
-        .add_systems(
-            Update,
-            (
-                setup_player_animation,
-                trigger_player_attack_animation,
-                update_player_attack_timer,
-                update_player_idle_variations,
-                animate_player_damage,
-                display_health_bar,
-                detect_player_death,
-                show_death_screen,
-                handle_death_screen_input,
-                handle_escape_key,
-                handle_lock_key,
-                (
-                    update_player_animation_state,
-                    control_player_animation,
-                    update_player_prev_positions,
-                )
-                    .chain(),
-            )
-                .run_if(in_state(AppState::Playing)),
-        )
-        .run();
-}
-
-fn setup_client(
+fn add_input_manager(
     mut commands: Commands,
-    network_channels: Res<RepliconChannels>,
-    server_config: Res<ServerConfig>,
+    player_query: Query<(Entity, &PlayerOwner), With<Player>>,
+    my_client_id: Res<MyClientId>,
+    input_query: Query<
+        Entity,
+        With<lightyear::prelude::input::native::InputMarker<zombrise_shared::protocol::GameInput>>,
+    >,
 ) {
-    let server_channels_config = network_channels.server_configs();
-    let client_channels_config = network_channels.client_configs();
+    // Add InputMarker to the local player entity so inputs are attached to it
+    for (entity, owner) in &player_query {
+        // Only add input components if they are not already present
+        if owner.0 == my_client_id.0 && input_query.get(entity).is_err() {
+            use lightyear::prelude::input::native::{ActionState, InputMarker};
+            use zombrise_shared::protocol::GameInput;
 
-    let client = RenetClient::new(
-        ConnectionConfig {
-            server_channels_config,
-            client_channels_config,
-            available_bytes_per_tick: 16 * 1024,
-        },
-        false,
-    );
-
-    let current_time = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap();
-    let client_id = current_time.as_millis() as u64;
-
-    let server_addr: SocketAddr = server_config
-        .url
-        .to_socket_addrs()
-        .expect("Failed to resolve server address")
-        .find(|addr| addr.is_ipv4()) // Prefer IPv4
-        .or_else(|| server_config.url.to_socket_addrs().ok()?.next())
-        .expect("No address found for server");
-
-    println!("Connecting to server at: {}", server_addr);
-
-    let authentication = ClientAuthentication::Unsecure {
-        client_id,
-        protocol_id: 0,
-        server_addr,
-        socket_id: 0,
-        user_data: None,
-    };
-
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let native_socket = NativeSocket::new(socket).unwrap();
-    let transport =
-        NetcodeClientTransport::new(current_time, authentication, native_socket).unwrap();
-
-    commands.insert_resource(client);
-    commands.insert_resource(transport);
-
-    // Set the client ID immediately so we can identify our player
-    // Note: client_id is the renet2 auth ID we use for authentication
-    commands.insert_resource(MyClientId(client_id));
-    println!("Client ID set to: {}", client_id);
+            commands.entity(entity).insert((
+                InputMarker::<GameInput>::default(),
+                ActionState::<GameInput>::default(),
+            ));
+        }
+    }
 }
 
 fn setup_camera(mut commands: Commands) {
-    println!("=== SETUP_CAMERA CALLED ===");
-
-    let camera_3d_entity = commands
-        .spawn((
-            Camera3d::default(),
-            Camera {
-                order: 0,
-                is_active: false,
-                clear_color: ClearColorConfig::Custom(Color::srgb(0.64, 0.74, 0.88)),
-                ..default()
+    commands.spawn((
+        Camera3d::default(),
+        Camera {
+            order: 0,
+            is_active: false,
+            clear_color: ClearColorConfig::Custom(Color::srgb(0.64, 0.74, 0.88)),
+            ..default()
+        },
+        Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+        MainCamera,
+        // Atmospheric winter fog - gives depth to the snowy landscape
+        DistanceFog {
+            color: Color::srgba(0.70, 0.75, 0.82, 1.0), // Cold, bluish-grey fog
+            falloff: FogFalloff::Linear {
+                start: 25.0, // No fog closer than this
+                end: 100.0,  // Full fog at this distance
             },
-            Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
-            MainCamera,
-            // Atmospheric winter fog - gives depth to the snowy landscape
-            DistanceFog {
-                color: Color::srgba(0.70, 0.75, 0.82, 1.0), // Cold, bluish-grey fog
-                falloff: FogFalloff::Linear {
-                    start: 25.0, // No fog closer than this
-                    end: 100.0,  // Full fog at this distance
-                },
-                ..default()
-            },
-        ))
-        .id();
-    println!("3D camera spawned (inactive): {:?}", camera_3d_entity);
+            ..default()
+        },
+    ));
 
-    let camera_2d_entity = commands
-        .spawn((
-            Camera2d,
-            Camera {
-                order: 1,
-                clear_color: ClearColorConfig::Custom(Color::srgb(0.15, 0.15, 0.2)),
-                ..default()
-            },
-            IsDefaultUiCamera,
-        ))
-        .id();
-    println!(
-        "UI camera spawned (active with clear color): {:?}",
-        camera_2d_entity
-    );
-
-    println!("=== SETUP_CAMERA COMPLETE ===");
+    commands.spawn((
+        Camera2d,
+        Camera {
+            order: 1,
+            clear_color: ClearColorConfig::Custom(Color::srgb(0.15, 0.15, 0.2)),
+            ..default()
+        },
+        IsDefaultUiCamera,
+    ));
 }
 
 fn activate_game_cameras(
@@ -365,15 +431,12 @@ fn cleanup_playing_state(
         commands.entity(entity).despawn();
     }
 
-    // Remove network resources to ensure clean disconnection
-    commands.remove_resource::<RenetClient>();
-    commands.remove_resource::<NetcodeClientTransport>();
+    // Remove network resources / disconnect
+    // Client disconnection is handled automatically by Lightyear
     commands.remove_resource::<MyClientId>();
 
     // Reset player dead state
     commands.insert_resource(PlayerDied(false));
-
-    println!("Cleaned up playing state (entities and network resources)");
 }
 
 fn spawn_map_visuals(
@@ -479,9 +542,6 @@ fn spawn_player_visuals(
     }
 }
 
-#[derive(Component)]
-pub struct ZombieVisual;
-
 fn spawn_zombie_visuals(
     mut commands: Commands,
     query: Query<(Entity, &Transform), (Added<Zombie>, Without<ZombieVisualsSpawned>)>,
@@ -573,68 +633,6 @@ fn despawn_with_children_recursive(
     commands.entity(entity).despawn();
 }
 
-fn handle_client_auto_aim(
-    mut player_query: Query<(Entity, &mut Transform, &PlayerOwner), With<Player>>,
-    mut local_rot_query: Query<&mut LocalPlayerRotation>,
-    zombie_query: Query<&Transform, (With<Zombie>, Without<Player>)>,
-    player_attacking_query: Query<(&PlayerAttacking, &PlayerOwner)>,
-    my_client_id: Res<MyClientId>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    suduxu_input: Option<Res<ButtonInput<zombrise_shared::suduxu::SuduxuButton>>>,
-) {
-    let suduxu_clicked = suduxu_input.map_or(false, |s| {
-        s.just_pressed(zombrise_shared::suduxu::SuduxuButton::A)
-    });
-
-    if keyboard_input.just_pressed(KeyCode::Space) || suduxu_clicked {
-        let mut local_player_data = None;
-        for (entity, transform, owner) in &mut player_query {
-            if owner.0 == my_client_id.0 {
-                local_player_data = Some((entity, transform));
-                break;
-            }
-        }
-
-        if let Some((entity, mut transform)) = local_player_data {
-            // Check attacking state
-            let is_attacking = player_attacking_query
-                .iter()
-                .any(|(a, o)| o.0 == my_client_id.0 && a.is_attacking);
-            if is_attacking {
-                return;
-            }
-
-            // Find closest zombie
-            let mut closest_dist_sq = 100.0; // 10.0^2 range (matches server)
-            let mut target_pos = None;
-
-            for zombie_transform in &zombie_query {
-                let dist_sq = transform
-                    .translation
-                    .distance_squared(zombie_transform.translation);
-                if dist_sq < closest_dist_sq {
-                    closest_dist_sq = dist_sq;
-                    target_pos = Some(zombie_transform.translation);
-                }
-            }
-
-            if let Some(pos) = target_pos {
-                let diff = pos - transform.translation;
-                let horizontal_diff = Vec3::new(diff.x, 0.0, diff.z);
-                if horizontal_diff.length_squared() > 0.001 {
-                    let target_rotation =
-                        Quat::from_rotation_arc(Vec3::NEG_Z, horizontal_diff.normalize());
-                    transform.rotation = target_rotation;
-
-                    if let Ok(mut local_rot) = local_rot_query.get_mut(entity) {
-                        local_rot.0 = target_rotation;
-                    }
-                }
-            }
-        }
-    }
-}
-
 fn camera_follow(
     player_query: Query<(&Transform, &PlayerOwner), (With<Player>, Without<MainCamera>)>,
     mut camera_query: Query<&mut Transform, With<MainCamera>>,
@@ -664,7 +662,7 @@ fn camera_follow(
 }
 
 fn handle_camera_rotation(
-    mut mouse_motion: bevy::prelude::MessageReader<MouseMotion>,
+    mut mouse_motion: EventReader<MouseMotion>,
     mut camera_rotation: ResMut<CameraRotation>,
 ) {
     const SENSITIVITY: f32 = 0.003;
@@ -678,7 +676,7 @@ fn handle_camera_rotation(
 }
 
 fn lock_cursor(mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>) {
-    if let Some(mut options) = cursor_query.iter_mut().next() {
+    if let Ok(mut options) = cursor_query.single_mut() {
         options.grab_mode = CursorGrabMode::Locked;
         options.visible = false;
     }
@@ -689,7 +687,7 @@ fn handle_escape_key(
     mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>,
 ) {
     if keys.just_pressed(KeyCode::Escape) {
-        if let Some(mut options) = cursor_query.iter_mut().next() {
+        if let Ok(mut options) = cursor_query.single_mut() {
             options.grab_mode = CursorGrabMode::None;
             options.visible = true;
         }
@@ -701,7 +699,7 @@ fn handle_lock_key(
     mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>,
 ) {
     if keys.just_pressed(KeyCode::KeyL) {
-        if let Some(mut options) = cursor_query.iter_mut().next() {
+        if let Ok(mut options) = cursor_query.single_mut() {
             options.grab_mode = CursorGrabMode::Locked;
             options.visible = false;
         }
@@ -740,30 +738,6 @@ fn animate_player_damage(
         }
     }
 }
-
-#[derive(Component)]
-struct PlayerVisualsSpawned;
-
-#[derive(Component)]
-struct PlayerVisualMesh;
-
-#[derive(Component)]
-struct ZombieVisualsSpawned;
-
-#[derive(Component)]
-struct MapVisualsSpawned;
-
-#[derive(Component)]
-struct TreeVisualsSpawned;
-
-#[derive(Component)]
-struct HealthBarUI;
-
-#[derive(Component)]
-struct HealthBarFill;
-
-#[derive(Component)]
-struct HealthText;
 
 fn display_health_bar(
     mut commands: Commands,
@@ -830,7 +804,7 @@ fn display_health_bar(
                             border: UiRect::all(Val::Px(2.0)),
                             ..default()
                         },
-                        BackgroundColor(Color::srgb(0.2, 0.2, 0.2).into()),
+                        BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
                     ))
                     .with_children(|parent| {
                         parent.spawn((
@@ -839,7 +813,7 @@ fn display_health_bar(
                                 height: Val::Percent(100.0),
                                 ..default()
                             },
-                            BackgroundColor(Color::srgb(0.2, 0.8, 0.2).into()),
+                            BackgroundColor(Color::srgb(0.2, 0.8, 0.2)),
                             HealthBarFill,
                         ));
                     });
@@ -894,7 +868,7 @@ fn fix_zombie_frustum_culling(
 
         // Traverse up to find ZombieVisual component (since mesh is now child of Visual)
         while let Ok(child_of) = parent_query.get(current) {
-            current = child_of.parent();
+            current = child_of.get(); // Relationship trait provides get() method
             if zombie_query.contains(current) {
                 is_zombie = true;
                 break;
@@ -986,7 +960,10 @@ fn setup_fire_assets(
 /// Spawns fire particles on dying zombies
 fn spawn_zombie_fire(
     mut commands: Commands,
-    zombie_visuals: Query<(Entity, &Transform, &ZombieLink), (With<ZombieVisual>, Without<ZombieFireSpawned>)>,
+    zombie_visuals: Query<
+        (Entity, &Transform, &ZombieLink),
+        (With<ZombieVisual>, Without<ZombieFireSpawned>),
+    >,
     dying_zombies: Query<&ZombieDying, With<Zombie>>,
     fire_assets: Option<Res<FireParticleAssets>>,
 ) {
@@ -1020,17 +997,9 @@ fn spawn_fire_burst(
     let rng = || fastrand::f32();
 
     for _ in 0..15 {
-        let offset = Vec3::new(
-            (rng() - 0.5) * 0.8,
-            rng() * 0.5,
-            (rng() - 0.5) * 0.8,
-        );
+        let offset = Vec3::new((rng() - 0.5) * 0.8, rng() * 0.5, (rng() - 0.5) * 0.8);
 
-        let velocity = Vec3::new(
-            (rng() - 0.5) * 0.5,
-            1.0 + rng() * 2.0,
-            (rng() - 0.5) * 0.5,
-        );
+        let velocity = Vec3::new((rng() - 0.5) * 0.5, 1.0 + rng() * 2.0, (rng() - 0.5) * 0.5);
 
         let size = 0.15 + rng() * 0.25;
         let lifetime = 0.5 + rng() * 1.0;
@@ -1084,17 +1053,9 @@ fn update_zombie_fire(
         if fastrand::f32() < time.delta_secs() * 12.0 {
             let rng = || fastrand::f32();
 
-            let offset = Vec3::new(
-                (rng() - 0.5) * 0.6,
-                rng() * 0.3,
-                (rng() - 0.5) * 0.6,
-            );
+            let offset = Vec3::new((rng() - 0.5) * 0.6, rng() * 0.3, (rng() - 0.5) * 0.6);
 
-            let velocity = Vec3::new(
-                (rng() - 0.5) * 0.3,
-                0.8 + rng() * 1.5,
-                (rng() - 0.5) * 0.3,
-            );
+            let velocity = Vec3::new((rng() - 0.5) * 0.3, 0.8 + rng() * 1.5, (rng() - 0.5) * 0.3);
 
             let size = 0.1 + rng() * 0.2;
             let lifetime = 0.4 + rng() * 0.8;
