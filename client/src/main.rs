@@ -11,6 +11,7 @@ use bevy::window::{PresentMode, PrimaryWindow};
 use bevy_mesh::skinning::SkinnedMesh;
 use bevy_simple_text_input::TextInputPlugin;
 
+use avian3d::prelude::*;
 use lightyear::prelude::client::*;
 
 use zombrise_shared::players::player::{CameraRotation, MainCamera, MyClientId, Player};
@@ -34,6 +35,9 @@ use audio::GameAudioPlugin;
 
 mod snowflakes;
 use snowflakes::SnowfallPlugin;
+
+mod physics;
+use physics::ClientPhysicsPlugin;
 
 mod startup_screen;
 use startup_screen::{
@@ -100,6 +104,8 @@ fn main() {
     .add_plugins(TextInputPlugin)
     .add_plugins(GameAudioPlugin)
     .add_plugins(SnowfallPlugin)
+    .add_plugins(PhysicsPlugins::default())
+    .add_plugins(ClientPhysicsPlugin)
     .init_state::<AppState>()
     .init_resource::<ServerConfig>()
     .insert_resource(CameraRotation {

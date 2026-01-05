@@ -1,6 +1,7 @@
 //! Protocol definition for Lightyear networking.
 //! Defines inputs, components, channels, and messages.
 
+use avian3d::prelude::*;
 use bevy::ecs::entity::MapEntities;
 use bevy::prelude::*;
 use lightyear::prelude::*;
@@ -105,8 +106,21 @@ impl Plugin for ProtocolPlugin {
         app.register_component::<TreeMarker>();
 
         // Transform MUST be registered for replication in Lightyear 0.25
-        app.register_component::<Transform>();
+        // Enable prediction for Transform to avoid jitter
+        app.register_component::<Transform>().add_prediction();
         app.register_component::<GlobalTransform>();
+
+        // Register physics components for prediction
+        app.register_component::<LinearVelocity>().add_prediction();
+        app.register_component::<AngularVelocity>().add_prediction();
+        app.register_component::<RigidBody>();
+        app.register_component::<Friction>();
+        app.register_component::<Restitution>();
+        app.register_component::<LinearDamping>();
+        app.register_component::<AngularDamping>();
+        app.register_component::<GravityScale>();
+        app.register_component::<Position>().add_prediction();
+        app.register_component::<Rotation>().add_prediction();
 
         // Register channel
         app.add_channel::<GameChannel>(ChannelSettings {
