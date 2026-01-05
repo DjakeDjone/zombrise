@@ -22,8 +22,8 @@
     </style>
     
 <script type="module">
-import init, * as bindings from '/zombrise_client-48e6145393e5e3c1.js';
-const wasm = await init({ module_or_path: '/zombrise_client-48e6145393e5e3c1_bg.wasm' });
+import init, * as bindings from '/zombrise_client-22189133287ec490.js';
+const wasm = await init({ module_or_path: '/zombrise_client-22189133287ec490_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -32,7 +32,7 @@ window.wasmBindings = bindings;
 dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
-<link rel="modulepreload" href="/zombrise_client-48e6145393e5e3c1.js" crossorigin="anonymous" integrity="sha384-ywQmYMBRiwzchtCXRrGRuVfjO+3Tja4lV8SQ2VlKJxYs6/nlPYx6ecXkIkZjLtNN"><link rel="preload" href="/zombrise_client-48e6145393e5e3c1_bg.wasm" crossorigin="anonymous" integrity="sha384-cOjehoVpeLBvKdoh3bcvB9p7H8QzMr85Pb39C1EG97ZUsR+eWKknaUhml8xtv+qs" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/zombrise_client-22189133287ec490.js" crossorigin="anonymous" integrity="sha384-mtyV+4C+Nl1HcMaUpB+yBOXslfD222CIdld7yVQ8ZXqxetttYRdyZoWSad4OklbU"><link rel="preload" href="/zombrise_client-22189133287ec490_bg.wasm" crossorigin="anonymous" integrity="sha384-ogX1wyXgY3evWx+dCMiMeJ6gepjsDvKelvyjpfEQnB2/r+pJMdd0/U9bwVyKXtNo" as="fetch" type="application/wasm"></head>
 <body>
     <script>
         document.addEventListener('contextmenu', event => event.preventDefault());
