@@ -1,0 +1,136 @@
+//! Zombie visual effects and spawning.
+
+use bevy::camera::primitives::Aabb;
+use bevy::ecs::hierarchy::ChildOf;
+use bevy::ecs::relationship::Relationship;
+use bevy::prelude::*;
+
+use zombrise_shared::zombie::zombie::{Zombie, ZombieLink};
+
+/// Marker for zombie visual entities
+#[derive(Component)]
+pub struct ZombieVisual;
+
+/// Marker for spawned zombie visuals
+#[derive(Component)]
+pub struct ZombieVisualsSpawned;
+
+/// Spawn zombie visuals when a zombie is added
+pub fn spawn_zombie_visuals(
+    mut commands: Commands,
+    query: Query<(Entity, &Transform), (Added<Zombie>, Without<ZombieVisualsSpawned>)>,
+    asset_server: Res<AssetServer>,
+) {
+    for (entity, transform) in query.iter() {
+        // Mark the logic entity as having visuals to prevent duplicate processing
+        commands.entity(entity).insert((
+            ZombieVisualsSpawned,
+            Visibility::default(),
+            InheritedVisibility::default(),
+            ViewVisibility::default(),
+        ));
+
+        // Spawn a separate entity for the visual mesh to allow smooth interpolation
+        // unrelated to the network snap updates on the main zombie entity.
+        commands.spawn((
+            SceneRoot(asset_server.load("zombie.glb#Scene0")),
+            Visibility::default(),
+            InheritedVisibility::default(),
+            ViewVisibility::default(),
+            // Start at the zombie's current position
+            Transform::from_translation(transform.translation + Vec3::new(0.0, -0.75, 0.0))
+                .with_rotation(transform.rotation * Quat::from_rotation_y(std::f32::consts::PI)),
+            GlobalTransform::default(),
+            ZombieVisual,
+            ZombieLink(entity),
+        ));
+    }
+}
+
+/// Update zombie visual transforms (smoothly interpolate)
+pub fn update_zombie_visuals_transform(
+    mut visual_query: Query<(&mut Transform, &ZombieLink), With<ZombieVisual>>,
+    zombie_query: Query<&Transform, (With<Zombie>, Without<ZombieVisual>)>,
+    time: Res<Time>,
+) {
+    for (mut visual_transform, link) in visual_query.iter_mut() {
+        if let Ok(target_transform) = zombie_query.get(link.0) {
+            let target_translation = target_transform.translation + Vec3::new(0.0, -0.75, 0.0);
+            let target_rotation =
+                target_transform.rotation * Quat::from_rotation_y(std::f32::consts::PI);
+
+            // Interpolation speed
+            let t = time.delta_secs() * 10.0;
+
+            // Interpolate position
+            visual_transform.translation = visual_transform.translation.lerp(target_translation, t);
+
+            // Interpolate rotation
+            visual_transform.rotation = visual_transform.rotation.slerp(target_rotation, t);
+
+            // Snap if too far (teleport)
+            if visual_transform.translation.distance(target_translation) > 2.0 {
+                visual_transform.translation = target_translation;
+                visual_transform.rotation = target_rotation;
+            }
+        }
+    }
+}
+
+/// Clean up orphaned zombie visuals when zombie entity is despawned
+pub fn cleanup_orphaned_zombie_visuals(
+    mut commands: Commands,
+    visual_query: Query<(Entity, &ZombieLink), With<ZombieVisual>>,
+    zombie_query: Query<Entity, With<Zombie>>,
+    children_query: Query<&Children>,
+) {
+    for (entity, link) in visual_query.iter() {
+        if !zombie_query.contains(link.0) {
+            despawn_with_children_recursive(&mut commands, entity, &children_query);
+        }
+    }
+}
+
+fn despawn_with_children_recursive(
+    commands: &mut Commands,
+    entity: Entity,
+    children_query: &Query<&Children>,
+) {
+    if let Ok(children) = children_query.get(entity) {
+        for child in children.iter() {
+            despawn_with_children_recursive(commands, child, children_query);
+        }
+    }
+    commands.entity(entity).despawn();
+}
+
+/// Fix zombie frustum culling issues
+pub fn fix_zombie_frustum_culling(
+    mut commands: Commands,
+    skinned_mesh_query: Query<Entity, Added<bevy_mesh::skinning::SkinnedMesh>>,
+    parent_query: Query<&ChildOf>,
+    zombie_query: Query<Entity, With<ZombieVisual>>,
+) {
+    for entity in skinned_mesh_query.iter() {
+        // Check if this mesh belongs to a zombie
+        let mut current = entity;
+        let mut is_zombie = false;
+
+        // Traverse up to find ZombieVisual component
+        while let Ok(child_of) = parent_query.get(current) {
+            current = child_of.get();
+            if zombie_query.contains(current) {
+                is_zombie = true;
+                break;
+            }
+        }
+
+        if is_zombie {
+            // Expand AABB to prevent culling issues
+            commands.entity(entity).insert(Aabb {
+                center: Vec3::new(0.0, 1.0, 0.0).into(),
+                half_extents: Vec3::splat(5.0).into(),
+            });
+        }
+    }
+}
