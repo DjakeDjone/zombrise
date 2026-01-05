@@ -47,29 +47,50 @@ pub fn spawn_zombie_visuals(
     }
 }
 
-/// Update zombie visual transforms (smoothly interpolate)
+/// Update zombie visual transforms (velocity-aware smooth interpolation)
+///
+/// This uses a combination of:
+/// 1. Velocity-based extrapolation: Continue moving in the zombie's velocity direction
+/// 2. Position correction: Smoothly correct toward the actual server position
+///
+/// This creates much smoother movement than just chasing the position.
 pub fn update_zombie_visuals_transform(
     mut visual_query: Query<(&mut Transform, &ZombieLink), With<ZombieVisual>>,
-    zombie_query: Query<&Transform, (With<Zombie>, Without<ZombieVisual>)>,
+    zombie_query: Query<
+        (&Transform, Option<&avian3d::prelude::LinearVelocity>),
+        (With<Zombie>, Without<ZombieVisual>),
+    >,
     time: Res<Time>,
 ) {
     for (mut visual_transform, link) in visual_query.iter_mut() {
-        if let Ok(target_transform) = zombie_query.get(link.0) {
+        if let Ok((target_transform, velocity)) = zombie_query.get(link.0) {
             let target_translation = target_transform.translation + Vec3::new(0.0, -0.75, 0.0);
             let target_rotation =
                 target_transform.rotation * Quat::from_rotation_y(std::f32::consts::PI);
 
-            // Interpolation speed
-            let t = time.delta_secs() * 10.0;
+            // Get the zombie's velocity for extrapolation
+            let vel = velocity
+                .map(|v| Vec3::new(v.x, 0.0, v.z))
+                .unwrap_or(Vec3::ZERO);
 
-            // Interpolate position
-            visual_transform.translation = visual_transform.translation.lerp(target_translation, t);
+            // First, continue moving in the velocity direction (extrapolation)
+            // This prevents the visual from "lagging behind"
+            let extrapolated_pos = visual_transform.translation + vel * time.delta_secs();
 
-            // Interpolate rotation
-            visual_transform.rotation = visual_transform.rotation.slerp(target_rotation, t);
+            // Then blend between the extrapolated position and the target
+            // Use a relatively high blend factor to correct errors quickly
+            let correction_factor = (time.delta_secs() * 12.0).min(1.0);
+            visual_transform.translation =
+                extrapolated_pos.lerp(target_translation, correction_factor);
 
-            // Snap if too far (teleport)
-            if visual_transform.translation.distance(target_translation) > 2.0 {
+            // Smoothly interpolate rotation
+            let rotation_factor = (time.delta_secs() * 15.0).min(1.0);
+            visual_transform.rotation = visual_transform
+                .rotation
+                .slerp(target_rotation, rotation_factor);
+
+            // Snap if too far (teleport) - this handles spawning and large corrections
+            if visual_transform.translation.distance(target_translation) > 3.0 {
                 visual_transform.translation = target_translation;
                 visual_transform.rotation = target_rotation;
             }

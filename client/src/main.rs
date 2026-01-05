@@ -64,7 +64,10 @@ use game::{
         update_zombie_fire, FireParticle,
     },
     health_ui::{display_health_bar, HealthBarUI},
-    player_visuals::{animate_player_damage, spawn_player_visuals, PlayerVisualsSpawned},
+    player_visuals::{
+        animate_player_damage, spawn_player_visuals, update_other_player_visuals,
+        PlayerVisualsSpawned,
+    },
     world_visuals::{spawn_map_visuals, spawn_tree_visuals, MapVisualsSpawned, TreeVisualsSpawned},
     zombie_visuals::{
         cleanup_orphaned_zombie_visuals, fix_zombie_frustum_culling, spawn_zombie_visuals,
@@ -177,11 +180,12 @@ fn main() {
         Update,
         (add_input_manager, handle_camera_rotation, camera_follow).chain(),
     )
-    // Visual spawning
+    // Visual spawning and interpolation
     .add_systems(
         Update,
         (
             spawn_player_visuals,
+            update_other_player_visuals,
             spawn_map_visuals,
             spawn_zombie_visuals,
             update_zombie_visuals_transform,

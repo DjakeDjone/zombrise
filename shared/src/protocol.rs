@@ -106,7 +106,7 @@ impl Plugin for ProtocolPlugin {
         app.register_component::<TreeMarker>();
 
         // Transform MUST be registered for replication in Lightyear 0.25
-        // Enable prediction for Transform to avoid jitter
+        // Enable prediction for Transform to avoid jitter for predicted entities (Player)
         app.register_component::<Transform>().add_prediction();
         app.register_component::<GlobalTransform>();
 
