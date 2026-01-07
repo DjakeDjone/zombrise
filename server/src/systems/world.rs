@@ -8,6 +8,8 @@ use zombrise_shared::players::player::Player;
 use zombrise_shared::shared::{MapMarker, TreeMarker};
 use zombrise_shared::zombie::zombie::Zombie;
 
+use super::zombie_ai::ZOMBIE_BOUNDARY;
+
 /// Map radius constant
 pub const MAP_RADIUS: f32 = 28.0;
 
@@ -99,6 +101,20 @@ pub fn remove_fallen_entities(
 
     for (entity, transform) in &zombie_query {
         if transform.translation.y < FALL_THRESHOLD {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+/// Clean up zombies that have wandered too far from the map (prevents unbounded growth)
+pub fn cleanup_wandering_zombies(
+    mut commands: Commands,
+    zombie_query: Query<(Entity, &Transform), With<Zombie>>,
+) {
+    for (entity, transform) in &zombie_query {
+        let distance_from_origin =
+            Vec2::new(transform.translation.x, transform.translation.z).length();
+        if distance_from_origin > ZOMBIE_BOUNDARY {
             commands.entity(entity).despawn();
         }
     }

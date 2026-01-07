@@ -51,9 +51,12 @@ impl Default for ZombieBehavior {
 /// AI constants
 pub const CHASE_RANGE: f32 = 15.0;
 pub const ATTACK_RANGE: f32 = 1.5;
-pub const MAX_ZOMBIES: usize = 50;
+/// Maximum number of zombies allowed at once (safety cap for long-running servers)
+pub const MAX_ZOMBIES: usize = 40;
 pub const SPAWN_INTERVAL: f32 = 20.0;
 pub const SPAWN_RADIUS: f32 = 25.0;
+/// Boundary distance for cleaning up zombies that wander too far
+pub const ZOMBIE_BOUNDARY: f32 = 60.0;
 
 /// Spawn zombies periodically
 pub fn spawn_zombies(
