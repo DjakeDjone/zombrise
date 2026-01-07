@@ -88,12 +88,16 @@ pub fn setup_client(mut commands: Commands, server_config: Res<ServerConfig>) {
 pub fn add_input_manager(
     mut commands: Commands,
     player_query: Query<(Entity, &PlayerOwner), With<Player>>,
-    my_client_id: Res<MyClientId>,
+    my_client_id: Option<Res<MyClientId>>,
     input_query: Query<
         Entity,
         With<lightyear::prelude::input::native::InputMarker<zombrise_shared::protocol::GameInput>>,
     >,
 ) {
+    let Some(my_client_id) = my_client_id else {
+        return;
+    };
+
     // Add InputMarker to the local player entity so inputs are attached to it
     for (entity, owner) in &player_query {
         // Only add input components if they are not already present

@@ -67,9 +67,12 @@ pub fn activate_game_cameras(
 pub fn camera_follow(
     player_query: Query<(&Transform, &PlayerOwner), (With<Player>, Without<MainCamera>)>,
     mut camera_query: Query<&mut Transform, With<MainCamera>>,
-    my_client_id: Res<MyClientId>,
+    my_client_id: Option<Res<MyClientId>>,
     camera_rotation: Res<CameraRotation>,
 ) {
+    let Some(my_client_id) = my_client_id else {
+        return;
+    };
     for (player_transform, owner) in player_query.iter() {
         if owner.0 == my_client_id.0 {
             if let Ok(mut camera_transform) = camera_query.single_mut() {

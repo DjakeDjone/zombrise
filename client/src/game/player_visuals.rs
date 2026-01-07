@@ -31,8 +31,11 @@ pub fn spawn_player_visuals(
         (Added<Player>, Without<PlayerVisualsSpawned>),
     >,
     asset_server: Res<AssetServer>,
-    my_client_id: Res<MyClientId>,
+    my_client_id: Option<Res<MyClientId>>,
 ) {
+    let Some(my_client_id) = my_client_id else {
+        return;
+    };
     for (entity, transform, owner) in query.iter() {
         let mut entity_commands = commands.entity(entity);
 
@@ -127,8 +130,11 @@ pub fn animate_player_damage(
     >,
     visual_mesh_query: Query<&MeshMaterial3d<StandardMaterial>, With<PlayerVisualMesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    my_client_id: Res<MyClientId>,
+    my_client_id: Option<Res<MyClientId>>,
 ) {
+    let Some(my_client_id) = my_client_id else {
+        return;
+    };
     for (damage_flash, owner, children) in player_query.iter() {
         if owner.0 == my_client_id.0 {
             // Find the visual mesh child

@@ -275,6 +275,13 @@ fn cleanup_playing_state(
             With<FireParticle>,
         )>,
     >,
+    // Query for network client entities
+    network_client_query: Query<Entity, With<lightyear::prelude::client::NetcodeClient>>,
+    // Query for entities with InputMarker
+    input_marker_query: Query<
+        Entity,
+        With<lightyear::prelude::input::native::InputMarker<zombrise_shared::protocol::GameInput>>,
+    >,
 ) {
     // Remove UI
     for entity in health_ui_query.iter() {
@@ -284,6 +291,19 @@ fn cleanup_playing_state(
     // Remove game entities
     for entity in game_entities.iter() {
         commands.entity(entity).despawn();
+    }
+
+    // Despawn network client entities (this will disconnect from server)
+    for entity in network_client_query.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    // Remove entities with InputMarker (they should have been despawned with Player entities,
+    // but we're double-checking to prevent multiple entity errors on reconnect)
+    for entity in input_marker_query.iter() {
+        if commands.get_entity(entity).is_ok() {
+            commands.entity(entity).despawn();
+        }
     }
 
     // Remove network resources

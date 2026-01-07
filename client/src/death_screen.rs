@@ -13,9 +13,13 @@ pub struct DeathScreenMarker;
 /// Detects player death
 pub fn detect_player_death(
     player_query: Query<(&Health, &PlayerOwner), With<Player>>,
-    client_id: Res<crate::MyClientId>,
+    client_id: Option<Res<crate::MyClientId>>,
     mut player_died: ResMut<PlayerDied>,
 ) {
+    let Some(client_id) = client_id else {
+        return;
+    };
+
     // Don't check death if we haven't connected yet (client ID is 0)
     if client_id.0 == 0 {
         return;

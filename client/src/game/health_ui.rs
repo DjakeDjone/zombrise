@@ -21,7 +21,7 @@ pub struct HealthText;
 pub fn display_health_bar(
     mut commands: Commands,
     player_query: Query<(&Health, &PlayerOwner), With<Player>>,
-    my_client_id: Res<MyClientId>,
+    my_client_id: Option<Res<MyClientId>>,
     health_ui_query: Query<Entity, With<HealthBarUI>>,
     mut health_fill_query: Query<
         (&mut Node, &mut BackgroundColor),
@@ -29,6 +29,14 @@ pub fn display_health_bar(
     >,
     mut health_text_query: Query<(&mut Text, &mut TextColor), With<HealthText>>,
 ) {
+    let Some(my_client_id) = my_client_id else {
+        // Cleanup health UI if client ID is gone (disconnected)
+        for entity in health_ui_query.iter() {
+            commands.entity(entity).despawn();
+        }
+        return;
+    };
+
     // Find our player's health
     let mut our_health: Option<&Health> = None;
     for (health, owner) in player_query.iter() {
