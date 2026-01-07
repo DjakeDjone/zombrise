@@ -151,7 +151,7 @@ fn spawn_fire_burst(
     // Spawn initial burst of fire particles
     let rng = || fastrand::f32();
 
-    for _ in 0..15 {
+    for _ in 0..8 {
         let offset = Vec3::new((rng() - 0.5) * 0.8, rng() * 0.5, (rng() - 0.5) * 0.8);
         let velocity = Vec3::new((rng() - 0.5) * 0.5, 1.0 + rng() * 2.0, (rng() - 0.5) * 0.5);
         let size = 0.15 + rng() * 0.25;
@@ -203,7 +203,7 @@ pub fn update_zombie_fire(
         }
 
         // Spawn new particles periodically (roughly 10-15 per second)
-        if fastrand::f32() < time.delta_secs() * 12.0 {
+        if fastrand::f32() < time.delta_secs() * 6.0 {
             spawn_continuous_fire(&mut commands, &assets, transform.translation);
         }
     }
@@ -225,7 +225,7 @@ pub fn update_player_fire(
         }
 
         // Spawn new particles periodically (roughly 10-15 per second)
-        if fastrand::f32() < time.delta_secs() * 12.0 {
+        if fastrand::f32() < time.delta_secs() * 6.0 {
             spawn_continuous_fire(&mut commands, &assets, transform.translation);
         }
     }

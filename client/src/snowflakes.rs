@@ -14,7 +14,7 @@ pub struct SnowfallConfig {
 impl Default for SnowfallConfig {
     fn default() -> Self {
         Self {
-            count: 300,
+            count: 100,
             area_radius: 35.0,
             spawn_height: 15.0,
             despawn_height: -1.0,
