@@ -1,7 +1,7 @@
 use bevy::{
     ecs::component::Component,
     math::Vec3,
-    prelude::{Event, Reflect},
+    prelude::{Event, Reflect, ReflectComponent},
 };
 
 use serde::{Deserialize, Serialize};
@@ -39,6 +39,19 @@ pub struct MainCamera;
 
 #[derive(Component, Default)]
 pub struct PlayerAttackCooldown(pub f32);
+
+/// Component to track player death sequence.
+/// When a player dies, they fall to the ground, then burn before disappearing.
+#[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default, PartialEq)]
+#[reflect(Component)]
+pub struct PlayerDying {
+    /// Total time since death started
+    pub timer: f32,
+    /// Duration of falling phase
+    pub fall_duration: f32,
+    /// Duration of burning phase
+    pub burn_duration: f32,
+}
 
 /// Resource to track the local client's ID
 #[cfg(feature = "client")]

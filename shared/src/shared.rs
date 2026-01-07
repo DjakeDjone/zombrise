@@ -1,5 +1,5 @@
 use crate::entity2::Health;
-pub use crate::players::player::{DamageFlash, DamagePlayer, Player, PlayerOwner};
+pub use crate::players::player::{DamageFlash, DamagePlayer, Player, PlayerDying, PlayerOwner};
 pub use crate::zombie::zombie::{Zombie, ZombieDamageFlash, ZombieDying};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -30,6 +30,7 @@ impl Plugin for SharedPlugin {
         app.register_type::<PlayerOwner>();
         app.register_type::<Health>();
         app.register_type::<DamageFlash>();
+        app.register_type::<crate::players::player::PlayerDying>();
         app.register_type::<Zombie>();
         app.register_type::<ZombieDamageFlash>();
         app.register_type::<ZombieDying>();

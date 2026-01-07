@@ -1,8 +1,9 @@
-//! Fire particle effects for dying zombies.
+//! Fire particle effects for dying zombies and players.
 
 use bevy::prelude::*;
 
 use super::zombie_visuals::ZombieVisual;
+use zombrise_shared::players::player::{Player, PlayerDying};
 use zombrise_shared::zombie::zombie::{Zombie, ZombieDying, ZombieLink};
 
 /// Marker component for fire particle entities
@@ -19,6 +20,10 @@ pub struct FireParticle {
 /// Marker for zombies that have fire spawned
 #[derive(Component)]
 pub struct ZombieFireSpawned;
+
+/// Marker for players that have fire spawned
+#[derive(Component)]
+pub struct PlayerFireSpawned;
 
 /// Resource to cache fire particle assets
 #[derive(Resource)]
@@ -98,7 +103,34 @@ pub fn spawn_zombie_fire(
             continue;
         }
 
-        spawn_fire_burst(&mut commands, &assets, transform.translation, visual_entity);
+        spawn_fire_burst(
+            &mut commands,
+            &assets,
+            transform.translation,
+            visual_entity,
+            true,
+        );
+    }
+}
+
+/// Spawns fire particles on dying players
+pub fn spawn_player_fire(
+    mut commands: Commands,
+    dying_players: Query<
+        (Entity, &Transform, &PlayerDying),
+        (With<Player>, Without<PlayerFireSpawned>),
+    >,
+    fire_assets: Option<Res<FireParticleAssets>>,
+) {
+    let Some(assets) = fire_assets else { return };
+
+    for (entity, transform, dying) in &dying_players {
+        // Only start fire during burn phase
+        if dying.timer < dying.fall_duration {
+            continue;
+        }
+
+        spawn_fire_burst(&mut commands, &assets, transform.translation, entity, false);
     }
 }
 
@@ -107,9 +139,14 @@ fn spawn_fire_burst(
     assets: &FireParticleAssets,
     position: Vec3,
     parent_entity: Entity,
+    is_zombie: bool,
 ) {
     // Mark as having fire spawned
-    commands.entity(parent_entity).insert(ZombieFireSpawned);
+    if is_zombie {
+        commands.entity(parent_entity).insert(ZombieFireSpawned);
+    } else {
+        commands.entity(parent_entity).insert(PlayerFireSpawned);
+    }
 
     // Spawn initial burst of fire particles
     let rng = || fastrand::f32();
@@ -167,36 +204,61 @@ pub fn update_zombie_fire(
 
         // Spawn new particles periodically (roughly 10-15 per second)
         if fastrand::f32() < time.delta_secs() * 12.0 {
-            let rng = || fastrand::f32();
-
-            let offset = Vec3::new((rng() - 0.5) * 0.6, rng() * 0.3, (rng() - 0.5) * 0.6);
-            let velocity = Vec3::new((rng() - 0.5) * 0.3, 0.8 + rng() * 1.5, (rng() - 0.5) * 0.3);
-            let size = 0.1 + rng() * 0.2;
-            let lifetime = 0.4 + rng() * 0.8;
-
-            let material = match (rng() * 3.0) as u32 {
-                0 => assets.material_orange.clone(),
-                1 => assets.material_yellow.clone(),
-                _ => assets.material_red.clone(),
-            };
-
-            commands.spawn((
-                Mesh3d(assets.mesh.clone()),
-                MeshMaterial3d(material),
-                Transform::from_translation(transform.translation + offset)
-                    .with_scale(Vec3::splat(size)),
-                Visibility::default(),
-                InheritedVisibility::default(),
-                ViewVisibility::default(),
-                FireParticle {
-                    lifetime,
-                    velocity,
-                    initial_size: size,
-                },
-                Name::new("FireParticle"),
-            ));
+            spawn_continuous_fire(&mut commands, &assets, transform.translation);
         }
     }
+}
+
+/// Continuously spawn fire particles on burning players
+pub fn update_player_fire(
+    mut commands: Commands,
+    dying_players: Query<(&Transform, &PlayerDying), (With<Player>, With<PlayerFireSpawned>)>,
+    fire_assets: Option<Res<FireParticleAssets>>,
+    time: Res<Time>,
+) {
+    let Some(assets) = fire_assets else { return };
+
+    for (transform, dying) in &dying_players {
+        // Only during burn phase
+        if dying.timer < dying.fall_duration {
+            continue;
+        }
+
+        // Spawn new particles periodically (roughly 10-15 per second)
+        if fastrand::f32() < time.delta_secs() * 12.0 {
+            spawn_continuous_fire(&mut commands, &assets, transform.translation);
+        }
+    }
+}
+
+fn spawn_continuous_fire(commands: &mut Commands, assets: &FireParticleAssets, position: Vec3) {
+    let rng = || fastrand::f32();
+
+    let offset = Vec3::new((rng() - 0.5) * 0.6, rng() * 0.3, (rng() - 0.5) * 0.6);
+    let velocity = Vec3::new((rng() - 0.5) * 0.3, 0.8 + rng() * 1.5, (rng() - 0.5) * 0.3);
+    let size = 0.1 + rng() * 0.2;
+    let lifetime = 0.4 + rng() * 0.8;
+
+    let material = match (rng() * 3.0) as u32 {
+        0 => assets.material_orange.clone(),
+        1 => assets.material_yellow.clone(),
+        _ => assets.material_red.clone(),
+    };
+
+    commands.spawn((
+        Mesh3d(assets.mesh.clone()),
+        MeshMaterial3d(material),
+        Transform::from_translation(position + offset).with_scale(Vec3::splat(size)),
+        Visibility::default(),
+        InheritedVisibility::default(),
+        ViewVisibility::default(),
+        FireParticle {
+            lifetime,
+            velocity,
+            initial_size: size,
+        },
+        Name::new("FireParticle"),
+    ));
 }
 
 /// Animate fire particles - rise up, flicker, and fade

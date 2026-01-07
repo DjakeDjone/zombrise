@@ -51,6 +51,7 @@ pub struct PlayerAnimations {
     pub idle_nervous: AnimationNodeIndex,
     pub walking: AnimationNodeIndex,
     pub attacking: AnimationNodeIndex,
+    pub hurt: AnimationNodeIndex,
 }
 
 /// Previous position
@@ -71,6 +72,7 @@ pub enum PlayerAnimationState {
     IdleNervous,
     Walking,
     Attacking,
+    Hurt,
 }
 
 #[cfg(feature = "client")]
@@ -80,6 +82,7 @@ pub struct PlayerAnimationConfig {
     pub idle_nervous_animation: AnimationClipConfig,
     pub walking_animation: AnimationClipConfig,
     pub attacking_animation: AnimationClipConfig,
+    pub hurt_animation: AnimationClipConfig,
 }
 
 #[cfg(feature = "client")]
@@ -113,6 +116,11 @@ impl Default for PlayerAnimationConfig {
             attacking_animation: AnimationClipConfig {
                 path: "player.glb#Animation7", // Punching
                 speed: 1.5,
+                repeat: false,
+            },
+            hurt_animation: AnimationClipConfig {
+                path: "player.glb#Animation9", // Reaction animation for hurt
+                speed: 2.0,
                 repeat: false,
             },
         }
@@ -169,6 +177,11 @@ pub fn setup_player_animation(
             config.attacking_animation.speed,
             graph.root,
         );
+        let hurt_node = graph.add_clip(
+            asset_server.load(config.hurt_animation.path),
+            config.hurt_animation.speed,
+            graph.root,
+        );
 
         let graph_handle = graphs.add(graph);
 
@@ -188,6 +201,7 @@ pub fn setup_player_animation(
                 idle_nervous: idle_nervous_node,
                 walking: walking_node,
                 attacking: attacking_node,
+                hurt: hurt_node,
             })
             .insert(PlayerIdleTimer::default())
             .insert(PlayerAnimationState::default())
@@ -208,6 +222,7 @@ pub fn update_player_animation_state(
         (
             &crate::players::player::PlayerOwner,
             &bevy::transform::components::Transform,
+            &crate::players::player::DamageFlash,
         ),
         With<crate::players::player::Player>,
     >,
@@ -244,7 +259,7 @@ pub fn update_player_animation_state(
 
     for (mut anim_state, player_root, prev_position) in &mut anim_query {
         // Get player info for this animation entity
-        let Ok((owner, transform)) = player_query.get(player_root.0) else {
+        let Ok((owner, transform, damage_flash)) = player_query.get(player_root.0) else {
             continue;
         };
 
@@ -255,6 +270,9 @@ pub fn update_player_animation_state(
             .get(player_root.0)
             .map(|a| a.is_attacking)
             .unwrap_or(false);
+
+        // Check if player is hurt (damage flash active)
+        let is_hurt = damage_flash.timer > 0.0;
 
         // Determine if player is moving
         let is_moving = if is_local_player {
@@ -270,9 +288,11 @@ pub fn update_player_animation_state(
             }
         };
 
-        // Determine state
+        // Determine state - priority: Attacking > Hurt > Walking > Idle
         let new_state = if is_attacking {
             PlayerAnimationState::Attacking
+        } else if is_hurt {
+            PlayerAnimationState::Hurt
         } else if is_moving {
             PlayerAnimationState::Walking
         } else if *anim_state == PlayerAnimationState::IdleNervous {
@@ -383,6 +403,10 @@ pub fn control_player_animation(
                 if config.attacking_animation.repeat {
                     active.repeat();
                 }
+            }
+            PlayerAnimationState::Hurt => {
+                // Play hurt animation once (no repeat)
+                transitions.play(&mut player, animations.hurt, ANIMATION_TRANSITION_DURATION);
             }
         }
 

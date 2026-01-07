@@ -98,6 +98,7 @@ impl Plugin for ProtocolPlugin {
 
         app.register_component::<Health>();
         app.register_component::<DamageFlash>();
+        app.register_component::<crate::players::player::PlayerDying>();
         app.register_component::<Zombie>();
         app.register_component::<ZombieDamageFlash>();
         app.register_component::<ZombieDying>();

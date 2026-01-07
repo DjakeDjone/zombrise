@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 
 use zombrise_shared::entity2::Health;
-use zombrise_shared::players::player::{DamageFlash, Player, PlayerAttackCooldown};
+use zombrise_shared::players::player::{DamageFlash, Player, PlayerAttackCooldown, PlayerDying};
 
 /// Health regeneration rate per second
 pub const HEALTH_REGEN_RATE: f32 = 2.0;
@@ -26,12 +26,48 @@ pub fn update_attack_cooldown(mut query: Query<&mut PlayerAttackCooldown>, time:
     }
 }
 
-/// Passive health regeneration for players
-pub fn passive_health_regeneration(mut query: Query<&mut Health, With<Player>>, time: Res<Time>) {
+/// Passive health regeneration for players (only if not dying)
+pub fn passive_health_regeneration(
+    mut query: Query<&mut Health, (With<Player>, Without<PlayerDying>)>,
+    time: Res<Time>,
+) {
     for mut health in &mut query {
         if health.current < health.max {
             health.current =
                 (health.current + HEALTH_REGEN_RATE * time.delta_secs()).min(health.max);
+        }
+    }
+}
+
+/// Detect when a player's health drops to 0 and trigger the dying sequence
+pub fn detect_player_death(
+    mut commands: Commands,
+    query: Query<(Entity, &Health), (With<Player>, Without<PlayerDying>)>,
+) {
+    for (entity, health) in &query {
+        if health.current <= 0.0 {
+            commands.entity(entity).insert(PlayerDying {
+                timer: 0.0,
+                fall_duration: 1.0,
+                burn_duration: 3.0,
+            });
+        }
+    }
+}
+
+/// Update dying players timer and despawn when complete
+pub fn update_dying_players(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut PlayerDying), With<Player>>,
+    time: Res<Time>,
+) {
+    for (entity, mut dying) in &mut query {
+        dying.timer += time.delta_secs();
+
+        // Despawn the player after the full death sequence
+        let total_duration = dying.fall_duration + dying.burn_duration;
+        if dying.timer >= total_duration {
+            commands.entity(entity).despawn();
         }
     }
 }

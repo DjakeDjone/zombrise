@@ -44,9 +44,16 @@ pub fn handle_player_attack(
     mut commands: Commands,
     _spatial_query: SpatialQuery,
 ) {
+    // Collect player positions and entities for PvP targeting
+    // We need this because we can't have mutable access to the same query twice
+    let player_positions: Vec<(Entity, u64, Vec3)> = player_query
+        .iter()
+        .map(|(e, owner, t, _, _, _, _)| (e, owner.0, t.translation))
+        .collect();
+
     for (
-        _player_entity,
-        _owner,
+        player_entity,
+        owner,
         mut player_transform,
         mut player_health,
         _damage_flash,
@@ -64,7 +71,7 @@ pub fn handle_player_attack(
             let attack_origin = player_transform.translation;
 
             // Find the closest zombie within range
-            let mut closest_zombie: Option<(Entity, Vec3, f32)> = None; // (entity, to_zombie, distance)
+            let mut closest_zombie: Option<(Entity, Vec3, f32)> = None; // (entity, to_target, distance)
 
             for (zombie_entity, zombie_transform) in &zombie_query {
                 let to_zombie = zombie_transform.translation - attack_origin;
@@ -77,38 +84,98 @@ pub fn handle_player_attack(
                 }
             }
 
-            // If there's a zombie in range, rotate toward it and attack
-            if let Some((zombie_entity, to_zombie, _distance)) = closest_zombie {
-                // Always rotate player toward the closest zombie
-                let dir = to_zombie.normalize();
+            // Find the closest OTHER player within range
+            let mut closest_player: Option<(Entity, Vec3, f32)> = None;
+
+            for (other_entity, other_owner, other_pos) in &player_positions {
+                // Don't attack self
+                if *other_entity == player_entity || *other_owner == owner.0 {
+                    continue;
+                }
+
+                let to_player = *other_pos - attack_origin;
+                let distance = to_player.length();
+
+                if distance <= ATTACK_RANGE
+                    && (closest_player.is_none() || distance < closest_player.as_ref().unwrap().2)
+                {
+                    closest_player = Some((*other_entity, to_player, distance));
+                }
+            }
+
+            // Determine which target is closer: zombie or player
+            let attack_target: Option<(Entity, Vec3, bool)> = match (closest_zombie, closest_player)
+            {
+                (Some((z_ent, z_dir, z_dist)), Some((p_ent, p_dir, p_dist))) => {
+                    if z_dist <= p_dist {
+                        Some((z_ent, z_dir, true)) // true = is zombie
+                    } else {
+                        Some((p_ent, p_dir, false)) // false = is player
+                    }
+                }
+                (Some((z_ent, z_dir, _)), None) => Some((z_ent, z_dir, true)),
+                (None, Some((p_ent, p_dir, _))) => Some((p_ent, p_dir, false)),
+                (None, None) => None,
+            };
+
+            // If there's a target in range, rotate toward it and attack
+            if let Some((target_entity, to_target, is_zombie)) = attack_target {
+                // Always rotate player toward the target
+                let dir = to_target.normalize();
                 let flat_dir = Vec3::new(dir.x, 0.0, dir.z).normalize_or_zero();
 
                 if flat_dir.length_squared() > 0.0 {
                     player_transform.look_to(flat_dir, Vec3::Y);
                 }
 
-                // Apply damage to this zombie
-                if let Ok((mut zombie_health, mut zombie_flash)) =
-                    zombie_health_query.get_mut(zombie_entity)
-                {
-                    zombie_health.current -= ATTACK_DAMAGE;
-                    zombie_flash.timer = 0.15;
+                if is_zombie {
+                    // Apply damage to zombie
+                    if let Ok((mut zombie_health, mut zombie_flash)) =
+                        zombie_health_query.get_mut(target_entity)
+                    {
+                        zombie_health.current -= ATTACK_DAMAGE;
+                        zombie_flash.timer = 0.15;
 
-                    if zombie_health.current <= 0.0 {
-                        // Reward the player with increased max health
-                        player_health.max += MAX_HEALTH_BONUS_PER_KILL;
-                        player_health.current += MAX_HEALTH_BONUS_PER_KILL;
+                        if zombie_health.current <= 0.0 {
+                            // Reward the player with increased max health
+                            player_health.max += MAX_HEALTH_BONUS_PER_KILL;
+                            player_health.current += MAX_HEALTH_BONUS_PER_KILL;
 
-                        // Start dying sequence
-                        commands.entity(zombie_entity).insert(ZombieDying {
-                            timer: 0.0,
-                            fall_duration: 1.0,
-                            burn_duration: 2.0,
-                        });
+                            // Start dying sequence
+                            commands.entity(target_entity).insert(ZombieDying {
+                                timer: 0.0,
+                                fall_duration: 1.0,
+                                burn_duration: 2.0,
+                            });
+                        }
                     }
+                } else {
+                    // Apply damage to other player - we need to defer this
+                    // because we can't mutably borrow player_query again
+                    commands.entity(target_entity).insert(PendingDamage {
+                        amount: ATTACK_DAMAGE,
+                    });
                 }
             }
         }
+    }
+}
+
+/// Marker component for pending damage to apply next frame
+#[derive(Component)]
+pub struct PendingDamage {
+    pub amount: f32,
+}
+
+/// Apply pending damage to players (runs after handle_player_attack)
+pub fn apply_pending_player_damage(
+    mut commands: Commands,
+    mut player_query: Query<(Entity, &mut Health, &mut DamageFlash, &PendingDamage), With<Player>>,
+) {
+    for (entity, mut health, mut flash, pending) in &mut player_query {
+        health.current -= pending.amount;
+        flash.timer = 0.15;
+        commands.entity(entity).remove::<PendingDamage>();
     }
 }
 

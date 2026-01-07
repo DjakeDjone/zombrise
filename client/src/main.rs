@@ -60,8 +60,8 @@ use game::{
         handle_lock_key, lock_cursor, setup_camera,
     },
     fire_effects::{
-        animate_fire_particles, setup_fire_assets, spawn_zombie_fire, update_dying_zombie_visuals,
-        update_zombie_fire, FireParticle,
+        animate_fire_particles, setup_fire_assets, spawn_player_fire, spawn_zombie_fire,
+        update_dying_zombie_visuals, update_player_fire, update_zombie_fire, FireParticle,
     },
     health_ui::{display_health_bar, HealthBarUI},
     player_visuals::{
@@ -210,6 +210,8 @@ fn main() {
             fix_zombie_frustum_culling,
             spawn_zombie_fire,
             update_zombie_fire,
+            spawn_player_fire,
+            update_player_fire,
             animate_fire_particles,
             update_dying_zombie_visuals,
         )

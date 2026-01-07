@@ -15,9 +15,12 @@ use zombrise_shared::shared::SharedPlugin;
 mod systems;
 
 use systems::{
-    combat::{handle_player_attack, zombie_collision_damage},
+    combat::{apply_pending_player_damage, handle_player_attack, zombie_collision_damage},
     networking::{despawn_clients, setup_networking, spawn_clients},
-    player::{passive_health_regeneration, update_attack_cooldown, update_damage_flash},
+    player::{
+        detect_player_death, passive_health_regeneration, update_attack_cooldown,
+        update_damage_flash, update_dying_players,
+    },
     world::{remove_fallen_entities, setup_server, update_map_size},
     zombie::{update_dying_zombies, update_zombie_damage_flash},
     zombie_ai::{spawn_zombies, zombie_movement, ZombieSpawnTimer},
@@ -51,12 +54,15 @@ fn main() {
             FixedUpdate,
             (
                 handle_player_attack,
+                apply_pending_player_damage,
                 zombie_movement,
                 zombie_collision_damage,
                 update_damage_flash,
                 update_zombie_damage_flash,
                 update_attack_cooldown,
                 update_dying_zombies,
+                detect_player_death,
+                update_dying_players,
                 remove_fallen_entities,
                 passive_health_regeneration,
             ),
