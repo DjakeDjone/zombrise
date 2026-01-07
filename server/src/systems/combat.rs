@@ -16,6 +16,8 @@ pub const ATTACK_DAMAGE: f32 = 25.0;
 pub const ATTACK_COOLDOWN: f32 = 0.5;
 pub const DAMAGE_RANGE: f32 = 1.5;
 pub const DAMAGE_PER_SECOND: f32 = 10.0;
+/// Max health bonus awarded to player for each zombie kill
+pub const MAX_HEALTH_BONUS_PER_KILL: f32 = 5.0;
 
 /// Handle player attacks
 pub fn handle_player_attack(
@@ -46,7 +48,7 @@ pub fn handle_player_attack(
         _player_entity,
         _owner,
         mut player_transform,
-        _player_health,
+        mut player_health,
         _damage_flash,
         mut cooldown,
         action_state,
@@ -93,6 +95,10 @@ pub fn handle_player_attack(
                     zombie_flash.timer = 0.15;
 
                     if zombie_health.current <= 0.0 {
+                        // Reward the player with increased max health
+                        player_health.max += MAX_HEALTH_BONUS_PER_KILL;
+                        player_health.current += MAX_HEALTH_BONUS_PER_KILL;
+
                         // Start dying sequence
                         commands.entity(zombie_entity).insert(ZombieDying {
                             timer: 0.0,

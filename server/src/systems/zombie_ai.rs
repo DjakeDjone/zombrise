@@ -163,6 +163,20 @@ pub fn zombie_movement(
                         *anim_state = ZombieAnimationState::Walking;
                         velocity.x = behavior.wander_direction.x * ZOMBIE_SPEED;
                         velocity.z = behavior.wander_direction.z * ZOMBIE_SPEED;
+
+                        // Face the wander direction to prevent moonwalking
+                        if behavior.wander_direction.length() > 0.01 {
+                            let target = Quat::from_rotation_arc(
+                                Vec3::NEG_Z,
+                                Vec3::new(
+                                    behavior.wander_direction.x,
+                                    0.0,
+                                    behavior.wander_direction.z,
+                                )
+                                .normalize(),
+                            );
+                            transform.rotation = target;
+                        }
                     }
                     _ => {
                         *anim_state = ZombieAnimationState::Idle;

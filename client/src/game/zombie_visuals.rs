@@ -5,7 +5,7 @@ use bevy::ecs::hierarchy::ChildOf;
 use bevy::ecs::relationship::Relationship;
 use bevy::prelude::*;
 
-use zombrise_shared::zombie::zombie::{Zombie, ZombieLink};
+use zombrise_shared::zombie::zombie::{Zombie, ZombieAnimationState, ZombieLink};
 
 /// Marker for zombie visual entities
 #[derive(Component)]
@@ -51,30 +51,51 @@ pub fn spawn_zombie_visuals(
 ///
 /// This uses a combination of:
 /// 1. Velocity-based extrapolation: Continue moving in the zombie's velocity direction
+///    (only when animation state indicates the zombie should be moving)
 /// 2. Position correction: Smoothly correct toward the actual server position
 ///
-/// This creates much smoother movement than just chasing the position.
+/// This creates much smoother movement than just chasing the position while
+/// ensuring the visual doesn't slide when the animation shows standing still.
 pub fn update_zombie_visuals_transform(
     mut visual_query: Query<(&mut Transform, &ZombieLink), With<ZombieVisual>>,
     zombie_query: Query<
-        (&Transform, Option<&avian3d::prelude::LinearVelocity>),
+        (
+            &Transform,
+            Option<&avian3d::prelude::LinearVelocity>,
+            Option<&ZombieAnimationState>,
+        ),
         (With<Zombie>, Without<ZombieVisual>),
     >,
     time: Res<Time>,
 ) {
     for (mut visual_transform, link) in visual_query.iter_mut() {
-        if let Ok((target_transform, velocity)) = zombie_query.get(link.0) {
+        if let Ok((target_transform, velocity, anim_state)) = zombie_query.get(link.0) {
             let target_translation = target_transform.translation + Vec3::new(0.0, -0.75, 0.0);
             let target_rotation =
                 target_transform.rotation * Quat::from_rotation_y(std::f32::consts::PI);
 
-            // Get the zombie's velocity for extrapolation
-            let vel = velocity
-                .map(|v| Vec3::new(v.x, 0.0, v.z))
-                .unwrap_or(Vec3::ZERO);
+            // Only use velocity extrapolation when the zombie's animation state
+            // indicates it should be moving (Walking or Running).
+            // This prevents the visual from sliding while the animation shows standing.
+            let should_use_velocity = anim_state
+                .map(|state| {
+                    matches!(
+                        state,
+                        ZombieAnimationState::Walking | ZombieAnimationState::Running
+                    )
+                })
+                .unwrap_or(false);
+
+            let vel = if should_use_velocity {
+                velocity
+                    .map(|v| Vec3::new(v.x, 0.0, v.z))
+                    .unwrap_or(Vec3::ZERO)
+            } else {
+                Vec3::ZERO
+            };
 
             // First, continue moving in the velocity direction (extrapolation)
-            // This prevents the visual from "lagging behind"
+            // This prevents the visual from "lagging behind" during movement
             let extrapolated_pos = visual_transform.translation + vel * time.delta_secs();
 
             // Then blend between the extrapolated position and the target
