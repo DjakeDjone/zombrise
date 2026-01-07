@@ -96,6 +96,7 @@ pub fn spawn_zombies(
 
 /// Zombie movement and AI behavior
 pub fn zombie_movement(
+    player_query: Query<(&Transform, &Health), (With<Player>, Without<Zombie>)>,
     mut zombie_query: Query<
         (
             &mut LinearVelocity,
@@ -105,26 +106,26 @@ pub fn zombie_movement(
         ),
         (With<Zombie>, Without<Player>, Without<ZombieDying>),
     >,
-    player_query: Query<(&Transform, &Health), (With<Player>, Without<Zombie>)>,
     time: Res<Time>,
 ) {
+    // Pre-collect active player positions (typically 1-4 players)
+    // This avoids repeated query iteration for each zombie
+    let players: Vec<Vec3> = player_query
+        .iter()
+        .filter(|(_, health)| health.current > 0.0)
+        .map(|(t, _)| t.translation)
+        .collect();
+
     for (mut velocity, mut transform, mut behavior, mut anim_state) in &mut zombie_query {
         behavior.timer.tick(time.delta());
 
-        // Find closest player
-        let mut closest_player: Option<Vec3> = None;
-        let mut closest_dist = f32::MAX;
-
-        for (player_transform, health) in &player_query {
-            if health.current <= 0.0 {
-                continue;
-            }
-            let dist = transform.translation.distance(player_transform.translation);
-            if dist < closest_dist {
-                closest_dist = dist;
-                closest_player = Some(player_transform.translation);
-            }
-        }
+        // Find closest player from pre-collected list
+        let (closest_player, closest_dist) = players
+            .iter()
+            .map(|p| (*p, transform.translation.distance(*p)))
+            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(p, d)| (Some(p), d))
+            .unwrap_or((None, f32::MAX));
 
         // Update AI state
         if let Some(player_pos) = closest_player {

@@ -118,19 +118,23 @@ pub fn zombie_collision_damage(
     mut player_query: Query<(&Transform, &mut Health, &mut DamageFlash), With<Player>>,
     time: Res<Time>,
 ) {
-    for zombie_transform in &zombie_query {
-        for (player_transform, mut health, mut flash) in &mut player_query {
-            if health.current <= 0.0 {
-                continue;
-            }
+    // Pre-collect zombie positions to avoid repeated query iteration
+    let zombie_positions: Vec<Vec3> = zombie_query.iter().map(|t| t.translation).collect();
 
-            let dist = zombie_transform
-                .translation
-                .distance(player_transform.translation);
-            if dist <= DAMAGE_RANGE {
-                health.current -= DAMAGE_PER_SECOND * time.delta_secs();
-                flash.timer = 0.1;
-            }
+    for (player_transform, mut health, mut flash) in &mut player_query {
+        // Early exit for dead players
+        if health.current <= 0.0 {
+            continue;
+        }
+
+        // Check if any zombie is in range
+        let in_range = zombie_positions
+            .iter()
+            .any(|zombie_pos| zombie_pos.distance(player_transform.translation) <= DAMAGE_RANGE);
+
+        if in_range {
+            health.current -= DAMAGE_PER_SECOND * time.delta_secs();
+            flash.timer = 0.1;
         }
     }
 }

@@ -15,6 +15,10 @@ pub struct ZombieVisual;
 #[derive(Component)]
 pub struct ZombieVisualsSpawned;
 
+/// Marker for entities that have frustum culling already fixed
+#[derive(Component)]
+pub struct FrustumCullingFixed;
+
 /// Spawn zombie visuals when a zombie is added
 pub fn spawn_zombie_visuals(
     mut commands: Commands,
@@ -147,9 +151,16 @@ fn despawn_with_children_recursive(
 }
 
 /// Fix zombie frustum culling issues
+/// Uses Added filter and FrustumCullingFixed marker to avoid repeated processing
 pub fn fix_zombie_frustum_culling(
     mut commands: Commands,
-    skinned_mesh_query: Query<Entity, Added<bevy_mesh::skinning::SkinnedMesh>>,
+    skinned_mesh_query: Query<
+        Entity,
+        (
+            Added<bevy_mesh::skinning::SkinnedMesh>,
+            Without<FrustumCullingFixed>,
+        ),
+    >,
     parent_query: Query<&ChildOf>,
     zombie_query: Query<Entity, With<ZombieVisual>>,
 ) {
@@ -168,11 +179,14 @@ pub fn fix_zombie_frustum_culling(
         }
 
         if is_zombie {
-            // Expand AABB to prevent culling issues
-            commands.entity(entity).insert(Aabb {
-                center: Vec3::new(0.0, 1.0, 0.0).into(),
-                half_extents: Vec3::splat(5.0).into(),
-            });
+            // Expand AABB and mark as fixed to prevent re-processing
+            commands.entity(entity).insert((
+                Aabb {
+                    center: Vec3::new(0.0, 1.0, 0.0).into(),
+                    half_extents: Vec3::splat(5.0).into(),
+                },
+                FrustumCullingFixed,
+            ));
         }
     }
 }
