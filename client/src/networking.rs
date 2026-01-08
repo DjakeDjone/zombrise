@@ -4,8 +4,6 @@ use bevy::prelude::*;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::SystemTime;
 
-use lightyear::prelude::client::*;
-
 use crate::startup_screen::ServerConfig;
 use zombrise_shared::players::player::{MyClientId, Player, PlayerOwner};
 

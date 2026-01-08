@@ -7,18 +7,18 @@ use bevy::gltf::{
     GltfExtras, GltfMaterialExtras, GltfMaterialName, GltfMeshExtras, GltfMeshName, GltfSceneExtras,
 };
 use bevy::prelude::*;
-use bevy::window::{PresentMode, PrimaryWindow};
+use bevy::window::PresentMode;
 use bevy_mesh::skinning::SkinnedMesh;
 use bevy_simple_text_input::TextInputPlugin;
 
 use avian3d::prelude::*;
 use lightyear::prelude::client::*;
 
-use zombrise_shared::players::player::{CameraRotation, MainCamera, MyClientId, Player};
+use zombrise_shared::players::player::{CameraRotation, MyClientId, Player};
 use zombrise_shared::players::player_animation::{
     control_player_animation, setup_player_animation, trigger_player_attack_animation,
     update_player_animation_state, update_player_attack_timer, update_player_idle_variations,
-    update_player_prev_positions, PlayerAttacking,
+    update_player_prev_positions,
 };
 
 use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};

@@ -96,7 +96,7 @@ pub fn camera_follow(
 
 /// Handle camera rotation from mouse movement
 pub fn handle_camera_rotation(
-    mut mouse_motion: EventReader<MouseMotion>,
+    mut mouse_motion: MessageReader<MouseMotion>,
     mut camera_rotation: ResMut<CameraRotation>,
 ) {
     for motion in mouse_motion.read() {
