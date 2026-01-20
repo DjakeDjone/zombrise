@@ -282,7 +282,7 @@ pub fn update_player_animation_state(
             // For remote players, check position changes
             if let Some(prev_pos) = prev_position {
                 let distance_moved = transform.translation.distance(prev_pos.0);
-                distance_moved > 0.01 && distance_moved < 0.5
+                distance_moved > 0.05 && distance_moved < 0.5
             } else {
                 false
             }

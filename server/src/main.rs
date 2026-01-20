@@ -45,7 +45,7 @@ fn main() {
         .add_plugins(ServerPlugins::default()) // Lightyear ServerPlugins
         .add_plugins(SharedPlugin)
         .add_plugins(PhysicsPlugins::default())
-        .insert_resource(Time::<Fixed>::from_hz(60.0))
+        .insert_resource(Time::<Fixed>::from_hz(30.0))
         .insert_resource(ZombieSpawnTimer::default())
         .add_observer(spawn_clients)
         .add_observer(despawn_clients)

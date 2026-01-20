@@ -262,6 +262,8 @@ pub fn handle_player_movement(
     >,
 ) {
     let speed = 3.0;
+    let damping_factor = 0.85; // Smooth deceleration
+    let velocity_threshold = 0.02; // Minimum velocity to prevent micro-movements
 
     for (mut velocity, mut transform, action_state) in &mut query {
         match &action_state.0 {
@@ -283,8 +285,17 @@ pub fn handle_player_movement(
                 }
             }
             GameInput::None => {
-                velocity.x = 0.0;
-                velocity.z = 0.0;
+                // Apply dampening for smooth deceleration
+                velocity.x *= damping_factor;
+                velocity.z *= damping_factor;
+
+                // Stop completely if velocity is below threshold
+                if velocity.x.abs() < velocity_threshold {
+                    velocity.x = 0.0;
+                }
+                if velocity.z.abs() < velocity_threshold {
+                    velocity.z = 0.0;
+                }
             }
             _ => {}
         }
