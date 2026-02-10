@@ -64,15 +64,25 @@ pub fn spawn_zombies(
     time: Res<Time>,
     mut timer: ResMut<ZombieSpawnTimer>,
     zombie_query: Query<&Zombie>,
+    player_query: Query<&Transform, With<Player>>,
 ) {
     timer.0.tick(time.delta());
 
     if timer.0.just_finished() && zombie_query.iter().count() < MAX_ZOMBIES {
+        let players: Vec<Vec3> = player_query.iter().map(|t| t.translation).collect();
+        
+        if players.is_empty() {
+            return;
+        }
+
         let mut rng = rand::rng();
+        // Pick a random player to spawn near
+        let player_pos = players[rng.random_range(0..players.len())];
+        
         let angle: f32 = rng.random_range(0.0..std::f32::consts::TAU);
-        let dist: f32 = rng.random_range(5.0..SPAWN_RADIUS);
-        let x = angle.cos() * dist;
-        let z = angle.sin() * dist;
+        let dist: f32 = rng.random_range(15.0..SPAWN_RADIUS); // Spawn a bit further away
+        let x = player_pos.x + angle.cos() * dist;
+        let z = player_pos.z + angle.sin() * dist;
 
         commands.spawn((
             Zombie,

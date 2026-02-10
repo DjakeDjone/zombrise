@@ -104,7 +104,9 @@ impl Plugin for ProtocolPlugin {
         app.register_component::<ZombieDying>();
         app.register_component::<ZombieAnimationState>();
         app.register_component::<MapMarker>();
+        app.register_component::<crate::shared::Chunk>();
         app.register_component::<TreeMarker>();
+        app.register_component::<crate::shared::SyncParent>();
 
         // Transform MUST be registered for replication in Lightyear 0.25
         // Enable prediction for Transform to avoid jitter for predicted entities (Player)

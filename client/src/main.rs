@@ -21,7 +21,7 @@ use zombrise_shared::players::player_animation::{
     update_player_prev_positions,
 };
 
-use zombrise_shared::shared::{MapMarker, SharedPlugin, TreeMarker};
+use zombrise_shared::shared::{Chunk, MapMarker, SharedPlugin, TreeMarker};
 
 use zombrise_shared::zombie::zombie::{
     add_zombie_animation_events, control_zombie_animation, setup_zombie_animation,
@@ -68,10 +68,13 @@ use game::{
         animate_player_damage, spawn_player_visuals, update_other_player_visuals,
         PlayerVisualsSpawned,
     },
-    world_visuals::{spawn_map_visuals, spawn_tree_visuals, MapVisualsSpawned, TreeVisualsSpawned},
+    world_visuals::{
+        init_world_visuals, spawn_chunk_visuals, spawn_tree_visuals,
+        MapVisualsSpawned, TreeVisualsSpawned,
+    },
     zombie_visuals::{
-        cleanup_orphaned_zombie_visuals, fix_zombie_frustum_culling, spawn_zombie_visuals,
-        update_zombie_visuals_transform, ZombieVisual, ZombieVisualsSpawned,
+        cleanup_orphaned_zombie_visuals, ensure_zombie_collider, fix_zombie_frustum_culling,
+        spawn_zombie_visuals, update_zombie_visuals_transform, ZombieVisual, ZombieVisualsSpawned,
     },
 };
 
@@ -119,6 +122,8 @@ fn main() {
     .init_resource::<MyClientId>()
     .init_resource::<ZombieAnimationEventsState>()
     .add_systems(Startup, setup_camera)
+    // Ensure zombie colliders exist before physics runs (prevents mass warning)
+    .add_systems(PreUpdate, ensure_zombie_collider)
     // Register types for replication
     .register_type::<Transform>()
     .register_type::<GlobalTransform>()
@@ -169,6 +174,7 @@ fn main() {
         (
             setup,
             setup_client,
+            init_world_visuals,
             lock_cursor,
             activate_game_cameras,
             setup_fire_assets,
@@ -186,11 +192,12 @@ fn main() {
         (
             spawn_player_visuals,
             update_other_player_visuals,
-            spawn_map_visuals,
+            spawn_chunk_visuals,
             spawn_zombie_visuals,
             update_zombie_visuals_transform,
             cleanup_orphaned_zombie_visuals,
-        ),
+        )
+            .run_if(in_state(AppState::Playing)),
     )
     // Zombie animation
     .add_systems(
@@ -268,6 +275,7 @@ fn cleanup_playing_state(
             With<Player>,
             With<Zombie>,
             With<MapMarker>,
+            With<Chunk>,
             With<TreeMarker>,
             With<PlayerVisualsSpawned>,
             With<ZombieVisualsSpawned>,
@@ -310,6 +318,7 @@ fn cleanup_playing_state(
 
     // Remove network resources
     commands.remove_resource::<MyClientId>();
+    commands.remove_resource::<map::MapAssets>();
 
     // Reset player dead state
     commands.insert_resource(PlayerDied(false));

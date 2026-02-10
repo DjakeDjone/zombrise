@@ -19,6 +19,19 @@ pub struct ZombieVisualsSpawned;
 #[derive(Component)]
 pub struct FrustumCullingFixed;
 
+/// Ensure all replicated rigid bodies have a Collider before physics runs.
+/// Lightyear replicates RigidBody but not Collider, so we add a default capsule
+/// in PreUpdate (before FixedUpdate/physics) to avoid the "no mass or inertia" warning.
+/// This covers both players and zombies.
+pub fn ensure_zombie_collider(
+    mut commands: Commands,
+    query: Query<Entity, (With<avian3d::prelude::RigidBody>, Without<avian3d::prelude::Collider>)>,
+) {
+    for entity in query.iter() {
+        commands.entity(entity).try_insert(avian3d::prelude::Collider::capsule(0.3, 1.0));
+    }
+}
+
 /// Spawn zombie visuals when a zombie is added
 pub fn spawn_zombie_visuals(
     mut commands: Commands,

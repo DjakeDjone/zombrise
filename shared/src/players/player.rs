@@ -257,6 +257,7 @@ pub fn handle_player_movement(
             &mut LinearVelocity,
             &mut bevy::prelude::Transform,
             &ActionState<GameInput>,
+            Option<&PlayerAttackCooldown>,
         ),
         bevy::prelude::With<Player>,
     >,
@@ -265,7 +266,10 @@ pub fn handle_player_movement(
     let damping_factor = 0.85; // Smooth deceleration
     let velocity_threshold = 0.02; // Minimum velocity to prevent micro-movements
 
-    for (mut velocity, mut transform, action_state) in &mut query {
+    for (mut velocity, mut transform, action_state, attack_cooldown) in &mut query {
+        // Check if the player just attacked (cooldown active) — preserve attack rotation
+        let is_attack_cooldown = attack_cooldown.is_some_and(|cd| cd.0 > 0.0);
+
         match &action_state.0 {
             GameInput::Move { direction, yaw } => {
                 let yaw_rotation = bevy::math::Quat::from_rotation_y(*yaw);
@@ -275,13 +279,16 @@ pub fn handle_player_movement(
                 velocity.x = rotated_direction.x * speed;
                 velocity.z = rotated_direction.z * speed;
 
-                let horizontal_direction = Vec3::new(rotated_direction.x, 0.0, rotated_direction.z);
-                if horizontal_direction.length() > 0.01 {
-                    let target_rotation = bevy::math::Quat::from_rotation_arc(
-                        Vec3::NEG_Z,
-                        horizontal_direction.normalize(),
-                    );
-                    transform.rotation = target_rotation;
+                // Only update rotation if not in attack cooldown
+                if !is_attack_cooldown {
+                    let horizontal_direction = Vec3::new(rotated_direction.x, 0.0, rotated_direction.z);
+                    if horizontal_direction.length() > 0.01 {
+                        let target_rotation = bevy::math::Quat::from_rotation_arc(
+                            Vec3::NEG_Z,
+                            horizontal_direction.normalize(),
+                        );
+                        transform.rotation = target_rotation;
+                    }
                 }
             }
             GameInput::None => {

@@ -21,7 +21,7 @@ use systems::{
         detect_player_death, passive_health_regeneration, update_attack_cooldown,
         update_damage_flash, update_dying_players,
     },
-    world::{cleanup_wandering_zombies, remove_fallen_entities, setup_server, update_map_size},
+    world::{cleanup_wandering_zombies, remove_fallen_entities, setup_server, update_chunks},
     zombie::{update_dying_zombies, update_zombie_damage_flash},
     zombie_ai::{spawn_zombies, zombie_movement, ZombieSpawnTimer},
 };
@@ -68,6 +68,6 @@ fn main() {
                 passive_health_regeneration,
             ),
         )
-        .add_systems(Update, (update_map_size, spawn_zombies))
+        .add_systems(Update, (spawn_zombies, update_chunks))
         .run();
 }

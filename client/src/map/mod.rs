@@ -3,19 +3,18 @@ use bevy::prelude::*;
 use bevy_mesh::{Indices, VertexAttributeValues};
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub struct SnowLandscapeConfig {
-    pub radius: f32,
+    pub chunk_size: f32,
     pub base_height: f32,
-    pub ice_radius: f32,
     pub ambient_brightness: f32,
 }
 
 impl Default for SnowLandscapeConfig {
     fn default() -> Self {
         Self {
-            radius: 28.0,
+            chunk_size: 32.0,
             base_height: 0.4,
-            ice_radius: 9.0,
             ambient_brightness: 380.0,
         }
     }
@@ -40,12 +39,9 @@ impl Default for SkyConfig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Resource)]
 pub struct MapAssets {
-    pub snow_mesh: Handle<Mesh>,
-    pub ice_mesh: Handle<Mesh>,
     pub snow_material: Handle<StandardMaterial>,
-    pub ice_material: Handle<StandardMaterial>,
     pub sky_mesh: Handle<Mesh>,
     pub sky_material: Handle<StandardMaterial>,
     pub config: SnowLandscapeConfig,
@@ -118,7 +114,7 @@ fn lerp_color(a: &Color, b: &Color, t: f32) -> Color {
     )
 }
 
-fn create_snow_ground_mesh(radius: f32, _segments: u32) -> Mesh {
+pub fn create_chunk_mesh(chunk_size: f32, chunk_x: i32, chunk_z: i32) -> Mesh {
     // scale1/scale2 for noise
     let noise = |x: f32, z: f32| -> f32 {
         let scale1 = 0.12;
@@ -128,12 +124,11 @@ fn create_snow_ground_mesh(radius: f32, _segments: u32) -> Mesh {
         n1 + n2
     };
 
-    // Use a Plane instead of manual radial mesh for stability
-    let size = radius * 2.5; // Slightly larger to cover corner gaps of the circle approximation
+    // Use a Plane
     let mut mesh = Plane3d::default()
         .mesh()
-        .size(size, size)
-        .subdivisions(64)
+        .size(chunk_size, chunk_size)
+        .subdivisions(16) // Lower subdivisions for performance, or keep high for quality
         .build();
 
     // specific mutable borrow to modify positions
@@ -141,28 +136,27 @@ fn create_snow_ground_mesh(radius: f32, _segments: u32) -> Mesh {
         mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
     {
         for pos in positions.iter_mut() {
-            let x = pos[0];
-            let z = pos[2];
-            // Apply height noise
-            let dist_sq = x * x + z * z;
-            let max_r = radius * 1.1;
-
-            // Fade out edges
-            let fade = (1.0 - (dist_sq.sqrt() / max_r).powf(2.0)).max(0.0);
-
-            pos[1] = noise(x, z) * fade;
+            let local_x = pos[0];
+            let local_z = pos[2];
+            
+            // Calculate global world space coordinates
+            // Chunk center is at (chunk_x * size + size/2, chunk_z * size + size/2)
+            // But Plane3d is centered at 0,0 locally.
+            // When we spawn the chunk visual, we'll attach it to the parent entity which is at the chunk center.
+            // So global_pos = transform.translation + local_pos
+            // world_x = (chunk_x * size + size/2) + local_x
+            
+            let world_x = (chunk_x as f32 * chunk_size) + (chunk_size / 2.0) + local_x;
+            let world_z = (chunk_z as f32 * chunk_size) + (chunk_size / 2.0) + local_z;
+            
+            // Apply height noise using world coordinates
+            pos[1] = noise(world_x, world_z);
         }
     }
 
     // Recalculate normals to account for height changes
-    mesh.duplicate_vertices(); // Ensure unique vertices for flat shading or just correct calculation?
-                               // Actually Plane3d shares vertices. We want smooth shading. Shared is fine.
-                               // But we need to update normals.
-    mesh.compute_flat_normals(); // Build-in helper? No, that gives flat shading.
-                                 // For now, let's trust the height variation is small enough that Up normals are "okay"
-                                 // OR we can rely on normal map for details.
-
-    // Generate tangents for normal mapping
+    mesh.duplicate_vertices(); 
+    mesh.compute_flat_normals(); 
     mesh.generate_tangents().ok();
 
     mesh
@@ -211,14 +205,6 @@ pub fn create_map_assets(
         ..default()
     });
 
-    let ice_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.95, 0.95, 0.95), // White to blend with snow
-        perceptual_roughness: 0.4,                 // Less smooth, more like snow-covered ice
-        metallic: 0.0,
-        reflectance: 0.2, // Less reflective
-        ..default()
-    });
-
     let sky_material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         unlit: true,
@@ -228,66 +214,16 @@ pub fn create_map_assets(
 
     let sky_mesh = meshes.add(create_sky_dome_mesh(sky_config.radius, &sky_config));
 
-    println!("Creating Map Assets with Plane3d approach.");
-
     MapAssets {
-        snow_mesh: meshes.add(create_snow_ground_mesh(config.radius, 64)),
-        ice_mesh: meshes.add(Cylinder::new(config.ice_radius, config.base_height * 0.45)),
         snow_material,
-        ice_material,
         sky_mesh,
         sky_material,
         config,
     }
 }
 
-pub fn spawn_snow_landscape(commands: &mut Commands, map_assets: &MapAssets, parent: Entity) {
-    apply_world_settings(commands, map_assets);
 
-    commands.spawn((
-        Mesh3d(map_assets.sky_mesh.clone()),
-        MeshMaterial3d(map_assets.sky_material.clone()),
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        Visibility::default(),
-        InheritedVisibility::default(),
-        ViewVisibility::default(),
-        SkyDome,
-        Name::new("Sky Dome"),
-    ));
-
-    commands
-        .spawn((
-            Mesh3d(map_assets.snow_mesh.clone()),
-            MeshMaterial3d(map_assets.snow_material.clone()),
-            Transform::from_xyz(0.0, 0.0, 0.0),
-            Visibility::default(),
-            InheritedVisibility::default(),
-            ViewVisibility::default(),
-            Name::new("Snow Plateau"),
-        ))
-        .insert(ChildOf(parent));
-
-    let thickness = map_assets.config.base_height * 0.45;
-    let pond_surface_y = -0.05;
-
-    commands
-        .spawn((
-            Mesh3d(map_assets.ice_mesh.clone()),
-            MeshMaterial3d(map_assets.ice_material.clone()),
-            Transform::from_xyz(
-                -map_assets.config.radius * 0.28,
-                pond_surface_y - thickness * 0.5,
-                map_assets.config.radius * 0.16,
-            ),
-            Visibility::default(),
-            InheritedVisibility::default(),
-            ViewVisibility::default(),
-            Name::new("Frozen Pond"),
-        ))
-        .insert(ChildOf(parent));
-}
-
-fn apply_world_settings(commands: &mut Commands, map_assets: &MapAssets) {
+pub fn apply_world_settings(commands: &mut Commands, map_assets: &MapAssets) {
     commands.insert_resource(ClearColor(Color::srgb(0.70, 0.68, 0.75)));
 
     commands.insert_resource(AmbientLight {
@@ -296,3 +232,4 @@ fn apply_world_settings(commands: &mut Commands, map_assets: &MapAssets) {
         affects_lightmapped_meshes: false,
     });
 }
+

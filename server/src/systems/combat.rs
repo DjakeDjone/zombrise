@@ -10,6 +10,8 @@ use zombrise_shared::protocol::GameInput;
 use zombrise_shared::shared::ZombieDamageFlash;
 use zombrise_shared::zombie::zombie::{Zombie, ZombieDying};
 
+use super::zombie_ai::{ZombieBehavior, ZombieAiState};
+
 /// Attack constants
 pub const ATTACK_RANGE: f32 = 2.5;
 pub const ATTACK_DAMAGE: f32 = 25.0;
@@ -179,14 +181,18 @@ pub fn apply_pending_player_damage(
     }
 }
 
-/// Zombie collision damage to players
+/// Zombie collision damage to players — only when zombie is attacking
 pub fn zombie_collision_damage(
-    zombie_query: Query<&Transform, (With<Zombie>, Without<ZombieDying>)>,
+    zombie_query: Query<(&Transform, &ZombieBehavior), (With<Zombie>, Without<ZombieDying>)>,
     mut player_query: Query<(&Transform, &mut Health, &mut DamageFlash), With<Player>>,
     time: Res<Time>,
 ) {
-    // Pre-collect zombie positions to avoid repeated query iteration
-    let zombie_positions: Vec<Vec3> = zombie_query.iter().map(|t| t.translation).collect();
+    // Only consider zombies that are in their Attacking state
+    let zombie_positions: Vec<Vec3> = zombie_query
+        .iter()
+        .filter(|(_, behavior)| behavior.state == ZombieAiState::Attacking)
+        .map(|(t, _)| t.translation)
+        .collect();
 
     for (player_transform, mut health, mut flash) in &mut player_query {
         // Early exit for dead players
@@ -194,7 +200,7 @@ pub fn zombie_collision_damage(
             continue;
         }
 
-        // Check if any zombie is in range
+        // Check if any attacking zombie is in range
         let in_range = zombie_positions
             .iter()
             .any(|zombie_pos| zombie_pos.distance(player_transform.translation) <= DAMAGE_RANGE);

@@ -1,6 +1,7 @@
 use crate::entity2::Health;
 pub use crate::players::player::{DamageFlash, DamagePlayer, Player, PlayerDying, PlayerOwner};
 pub use crate::zombie::zombie::{Zombie, ZombieDamageFlash, ZombieDying};
+
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -10,9 +11,26 @@ use crate::protocol::ProtocolPlugin;
 #[reflect(Component)]
 pub struct MapMarker;
 
-#[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default, PartialEq)]
+#[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default, PartialEq, Eq, Hash)]
 #[reflect(Component)]
 pub struct TreeMarker;
+
+#[derive(Component, Serialize, Deserialize, Clone, Debug, Reflect, Default, PartialEq, Eq, Hash)]
+#[reflect(Component)]
+pub struct Chunk {
+    pub x: i32,
+    pub z: i32,
+}
+
+#[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Reflect)]
+#[reflect(Component)]
+pub struct SyncParent(pub Entity);
+
+impl bevy::ecs::entity::MapEntities for SyncParent {
+    fn map_entities<M: bevy::ecs::entity::EntityMapper>(&mut self, entity_mapper: &mut M) {
+        self.0 = entity_mapper.get_mapped(self.0);
+    }
+}
 
 pub struct SharedPlugin;
 
@@ -35,7 +53,9 @@ impl Plugin for SharedPlugin {
         app.register_type::<ZombieDamageFlash>();
         app.register_type::<ZombieDying>();
         app.register_type::<MapMarker>();
+        app.register_type::<Chunk>();
         app.register_type::<TreeMarker>();
+        app.register_type::<SyncParent>();
         app.register_type::<crate::zombie::zombie::ZombieAnimationState>();
 
         // Add buffer_input system for client builds
