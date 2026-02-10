@@ -7,3 +7,4 @@ pub mod shared;
 #[cfg(all(feature = "client", not(target_arch = "wasm32")))]
 pub mod suduxu;
 pub mod zombie;
+pub mod combat;

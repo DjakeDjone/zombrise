@@ -1,6 +1,10 @@
 use crate::entity2::Health;
-pub use crate::players::player::{DamageFlash, DamagePlayer, Player, PlayerDying, PlayerOwner};
+pub use crate::players::player::{
+    DamageFlash, DamagePlayer, Player, PlayerAttackCooldown, PlayerDying, PlayerOwner,
+};
 pub use crate::zombie::zombie::{Zombie, ZombieDamageFlash, ZombieDying};
+
+
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -46,6 +50,7 @@ impl Plugin for SharedPlugin {
         // Bevy types if needed for reflection.
         app.register_type::<Player>();
         app.register_type::<PlayerOwner>();
+        app.register_type::<PlayerAttackCooldown>();
         app.register_type::<Health>();
         app.register_type::<DamageFlash>();
         app.register_type::<crate::players::player::PlayerDying>();
@@ -78,6 +83,13 @@ impl Plugin for SharedPlugin {
         }
 
         // Register shared movement system for both client (prediction) and server
-        app.add_systems(FixedUpdate, crate::players::player::handle_player_movement);
+        app.add_systems(FixedUpdate, (
+            crate::players::player::handle_player_movement,
+            crate::combat::update_attack_cooldown,
+            crate::combat::initiate_attack,
+        ));
+
+        app.register_type::<crate::combat::PlayerAttackedEvent>();
+
     }
 }

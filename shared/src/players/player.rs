@@ -37,7 +37,8 @@ pub struct PlayerOwner(pub u64);
 #[derive(Component)]
 pub struct MainCamera;
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Reflect)]
+#[reflect(Component)]
 pub struct PlayerAttackCooldown(pub f32);
 
 /// Component to track player death sequence.

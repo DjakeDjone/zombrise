@@ -15,10 +15,10 @@ use zombrise_shared::shared::SharedPlugin;
 mod systems;
 
 use systems::{
-    combat::{apply_pending_player_damage, handle_player_attack, zombie_collision_damage},
+    combat::{apply_attack_damage, apply_pending_player_damage, zombie_collision_damage},
     networking::{despawn_clients, setup_networking, spawn_clients},
     player::{
-        detect_player_death, passive_health_regeneration, update_attack_cooldown,
+        detect_player_death, passive_health_regeneration,
         update_damage_flash, update_dying_players,
     },
     world::{cleanup_wandering_zombies, remove_fallen_entities, setup_server, update_chunks},
@@ -49,17 +49,17 @@ fn main() {
         .insert_resource(ZombieSpawnTimer::default())
         .add_observer(spawn_clients)
         .add_observer(despawn_clients)
+        // Handle player attacks via event (damage logic)
+        .add_observer(apply_attack_damage)
         .add_systems(Startup, (setup_networking, setup_server).chain())
         .add_systems(
             FixedUpdate,
             (
-                handle_player_attack,
                 apply_pending_player_damage,
                 zombie_movement,
                 zombie_collision_damage,
                 update_damage_flash,
                 update_zombie_damage_flash,
-                update_attack_cooldown,
                 update_dying_zombies,
                 detect_player_death,
                 update_dying_players,
