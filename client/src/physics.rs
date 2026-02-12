@@ -32,7 +32,7 @@ fn add_player_physics(
 ) {
     for entity in query.iter() {
         commands.entity(entity).insert((
-            Collider::capsule(0.5, 1.0),
+            Collider::capsule(0.3, 1.4),
             LockedAxes::new().lock_rotation_x().lock_rotation_z(),
         ));
     }

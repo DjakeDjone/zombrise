@@ -88,7 +88,7 @@ pub fn spawn_clients(
         ))
         .insert((
             avian3d::prelude::RigidBody::Dynamic,
-            avian3d::prelude::Collider::capsule(0.5, 1.0),
+            avian3d::prelude::Collider::capsule(0.3, 1.4),
             avian3d::prelude::LinearVelocity::ZERO,
             avian3d::prelude::AngularVelocity::ZERO,
             avian3d::prelude::LockedAxes::new()
