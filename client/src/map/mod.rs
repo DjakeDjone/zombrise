@@ -128,7 +128,7 @@ pub fn create_chunk_mesh(chunk_size: f32, chunk_x: i32, chunk_z: i32) -> Mesh {
     let mut mesh = Plane3d::default()
         .mesh()
         .size(chunk_size, chunk_size)
-        .subdivisions(16) // Lower subdivisions for performance, or keep high for quality
+        .subdivisions(8)
         .build();
 
     // specific mutable borrow to modify positions

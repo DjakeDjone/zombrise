@@ -299,21 +299,3 @@ pub fn animate_fire_particles(
     }
 }
 
-/// Handle dying zombie visual effects
-pub fn update_dying_zombie_visuals(
-    zombie_logic_query: Query<&ZombieDying, With<Zombie>>,
-    visual_query: Query<(Entity, &ZombieLink), With<ZombieVisual>>,
-) {
-    for (_visual_entity, link) in &visual_query {
-        if let Ok(dying) = zombie_logic_query.get(link.0) {
-            let burn_progress = if dying.timer > dying.fall_duration {
-                (dying.timer - dying.fall_duration) / dying.burn_duration
-            } else {
-                0.0
-            };
-
-            // Could add material darkening here if needed
-            let _ = burn_progress;
-        }
-    }
-}

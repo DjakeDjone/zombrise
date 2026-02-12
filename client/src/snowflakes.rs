@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use zombrise_shared::players::player::MainCamera;
+
 #[derive(Resource, Clone)]
 pub struct SnowfallConfig {
     pub count: u32,
@@ -42,11 +44,6 @@ impl Plugin for SnowfallPlugin {
     }
 }
 
-#[derive(Resource)]
-struct SnowflakeAssets {
-    mesh: Handle<Mesh>,
-    material: Handle<StandardMaterial>,
-}
 
 fn setup_snowfall(
     mut commands: Commands,
@@ -65,13 +62,8 @@ fn setup_snowfall(
         ..default()
     });
 
-    commands.insert_resource(SnowflakeAssets {
-        mesh: mesh.clone(),
-        material: material.clone(),
-    });
-
     for _ in 0..config.count {
-        spawn_snowflake(&mut commands, &config, &mesh, &material, true);
+        spawn_snowflake(&mut commands, &config, &mesh, &material, Vec3::ZERO, true);
     }
 }
 
@@ -80,14 +72,15 @@ fn spawn_snowflake(
     config: &SnowfallConfig,
     mesh: &Handle<Mesh>,
     material: &Handle<StandardMaterial>,
+    center: Vec3,
     random_height: bool,
 ) {
     let rng = || fastrand::f32();
 
     let angle = rng() * std::f32::consts::TAU;
     let distance = rng().sqrt() * config.area_radius;
-    let x = angle.cos() * distance;
-    let z = angle.sin() * distance;
+    let x = center.x + angle.cos() * distance;
+    let z = center.z + angle.sin() * distance;
 
     let y = if random_height {
         config.despawn_height + rng() * (config.spawn_height - config.despawn_height)
@@ -117,18 +110,39 @@ fn spawn_snowflake(
     ));
 }
 
+/// Recycle a snowflake by teleporting it to a new random position near `center`.
+fn recycle_snowflake(
+    transform: &mut Transform,
+    snowflake: &Snowflake,
+    config: &SnowfallConfig,
+    center: Vec3,
+) {
+    let rng = || fastrand::f32();
+    let angle = rng() * std::f32::consts::TAU;
+    let distance = rng().sqrt() * config.area_radius;
+    transform.translation.x = center.x + angle.cos() * distance;
+    transform.translation.z = center.z + angle.sin() * distance;
+    transform.translation.y = config.spawn_height + rng() * 2.0;
+    let _ = snowflake; // speed/phase/drift stay the same — visual variety is preserved
+}
+
 fn animate_snowflakes(
-    mut commands: Commands,
     time: Res<Time>,
     config: Res<SnowfallConfig>,
-    assets: Option<Res<SnowflakeAssets>>,
-    mut query: Query<(Entity, &mut Transform, &Snowflake)>,
+    camera_query: Query<&Transform, (With<MainCamera>, Without<Snowflake>)>,
+    mut query: Query<(&mut Transform, &Snowflake)>,
 ) {
-    let Some(assets) = assets else { return };
     let dt = time.delta_secs();
     let elapsed = time.elapsed_secs();
 
-    for (entity, mut transform, snowflake) in query.iter_mut() {
+    // Use camera position as center; fallback to origin if no camera yet
+    let center = camera_query
+        .iter()
+        .next()
+        .map(|t| t.translation)
+        .unwrap_or(Vec3::ZERO);
+
+    for (mut transform, snowflake) in query.iter_mut() {
         transform.translation.y -= snowflake.speed * dt;
 
         let drift_x =
@@ -141,15 +155,18 @@ fn animate_snowflakes(
         transform.translation.x += drift_x;
         transform.translation.z += drift_z;
 
-        if transform.translation.y < config.despawn_height {
-            commands.entity(entity).despawn();
-            spawn_snowflake(
-                &mut commands,
-                &config,
-                &assets.mesh,
-                &assets.material,
-                false,
-            );
+        // Recycle snowflakes that have fallen below despawn height or drifted
+        // too far from the camera, instead of despawning and respawning
+        let too_low = transform.translation.y < config.despawn_height;
+        let too_far = Vec2::new(
+            transform.translation.x - center.x,
+            transform.translation.z - center.z,
+        )
+        .length()
+            > config.area_radius * 1.5;
+
+        if too_low || too_far {
+            recycle_snowflake(&mut transform, snowflake, &config, center);
         }
     }
 }

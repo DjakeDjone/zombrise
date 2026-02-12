@@ -61,7 +61,7 @@ use game::{
     },
     fire_effects::{
         animate_fire_particles, setup_fire_assets, spawn_player_fire, spawn_zombie_fire,
-        update_dying_zombie_visuals, update_player_fire, update_zombie_fire, FireParticle,
+        update_player_fire, update_zombie_fire, FireParticle,
     },
     health_ui::{display_health_bar, HealthBarUI},
     player_visuals::{
@@ -73,7 +73,7 @@ use game::{
         MapVisualsSpawned, TreeVisualsSpawned,
     },
     zombie_visuals::{
-        cleanup_orphaned_zombie_visuals, ensure_zombie_collider, fix_zombie_frustum_culling,
+        cleanup_orphaned_zombie_visuals, fix_zombie_frustum_culling,
         spawn_zombie_visuals, update_zombie_visuals_transform, ZombieVisual, ZombieVisualsSpawned,
     },
 };
@@ -122,8 +122,7 @@ fn main() {
     .init_resource::<MyClientId>()
     .init_resource::<ZombieAnimationEventsState>()
     .add_systems(Startup, setup_camera)
-    // Ensure zombie colliders exist before physics runs (prevents mass warning)
-    .add_systems(PreUpdate, ensure_zombie_collider)
+
     // Register types for replication
     .register_type::<Transform>()
     .register_type::<GlobalTransform>()
@@ -208,7 +207,8 @@ fn main() {
             control_zombie_animation,
             add_zombie_animation_events,
             spawn_tree_visuals,
-        ),
+        )
+            .run_if(in_state(AppState::Playing)),
     )
     // Fire effects
     .add_systems(
@@ -220,7 +220,6 @@ fn main() {
             spawn_player_fire,
             update_player_fire,
             animate_fire_particles,
-            update_dying_zombie_visuals,
         )
             .run_if(in_state(AppState::Playing)),
     )

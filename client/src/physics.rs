@@ -25,10 +25,10 @@ impl Plugin for ClientPhysicsPlugin {
     }
 }
 
-/// Add physics components to player entities that have RigidBody but no Collider
+/// Add physics components to player entities when they first appear
 fn add_player_physics(
     mut commands: Commands,
-    query: Query<Entity, (With<Player>, With<RigidBody>, Without<Collider>)>,
+    query: Query<Entity, (Added<Player>, With<RigidBody>, Without<Collider>)>,
 ) {
     for entity in query.iter() {
         commands.entity(entity).insert((
@@ -38,10 +38,10 @@ fn add_player_physics(
     }
 }
 
-/// Add physics components to zombie entities that have RigidBody but no Collider
+/// Add physics components to zombie entities when they first appear
 fn add_zombie_physics(
     mut commands: Commands,
-    query: Query<Entity, (With<Zombie>, With<RigidBody>, Without<Collider>)>,
+    query: Query<Entity, (Added<Zombie>, With<RigidBody>, Without<Collider>)>,
 ) {
     for entity in query.iter() {
         commands.entity(entity).insert((
@@ -51,10 +51,10 @@ fn add_zombie_physics(
     }
 }
 
-/// Add physics components to map entities
+/// Add physics components to map entities when they first appear
 fn add_map_physics(
     mut commands: Commands,
-    query: Query<Entity, (With<MapMarker>, Without<Collider>)>,
+    query: Query<Entity, (Added<MapMarker>, Without<Collider>)>,
 ) {
     for entity in query.iter() {
         commands
@@ -63,10 +63,10 @@ fn add_map_physics(
     }
 }
 
-/// Add physics components to tree entities
+/// Add physics components to tree entities when they first appear
 fn add_tree_physics(
     mut commands: Commands,
-    query: Query<Entity, (With<TreeMarker>, Without<Collider>)>,
+    query: Query<Entity, (Added<TreeMarker>, Without<Collider>)>,
 ) {
     for entity in query.iter() {
         commands
